@@ -20,6 +20,7 @@ class User(Base):
     first_name = Column(String(100))  # First name
     last_name = Column(String(100))  # Last name
     email = Column(String(100), unique=True)  # Email
+    username = Column(Integer, unique=True) # 10 digit ID to log in
     password = Column(String(100))  # Password (TO DO: Encrypting)
 
     accounts = relationship("Account", back_populates="user")
