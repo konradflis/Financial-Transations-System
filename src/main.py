@@ -3,6 +3,7 @@ import redis
 from fastapi import FastAPI
 from routes.transactions import router as transactions_router
 from routes.login import router as login_router
+from routes.atm_operations import router as withdrawal_router
 from src.database import engine
 from src.models import Base
 
@@ -13,6 +14,7 @@ r = redis.Redis(host='localhost', port=6379, db=0)
 app = FastAPI()
 app.include_router(transactions_router)
 app.include_router(login_router)
+app.include_router(withdrawal_router)
 
 # Create the defined tables
 Base.metadata.create_all(bind=engine)
