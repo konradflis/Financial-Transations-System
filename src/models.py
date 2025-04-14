@@ -3,7 +3,8 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 
-Base = declarative_base()
+Base = declarative_base()   # Base class
+
 
 class Account(Base):
     __tablename__ = 'accounts'
@@ -14,16 +15,18 @@ class Account(Base):
 
     user = relationship("User", back_populates="accounts")
 
+
 class User(Base):
     __tablename__ = 'users'
-    id = Column(Integer, primary_key=True, index=True) # PK: User ID
+    id = Column(Integer, primary_key=True, index=True)  # PK: User ID
     first_name = Column(String(100))  # First name
     last_name = Column(String(100))  # Last name
     email = Column(String(100), unique=True)  # Email
-    username = Column(Integer, unique=True) # 10 digit ID to log in
+    username = Column(Integer, unique=True)  # 10 digit ID to log in
     password = Column(String(100))  # Password (TO DO: Encrypting)
 
     accounts = relationship("Account", back_populates="user")
+
 
 class Transaction(Base):
     __tablename__ = 'transactions'
@@ -40,3 +43,4 @@ class Transaction(Base):
 
     def __repr__(self):
         return f"<Transaction(id={self.id}, amount={self.amount}, date={self.date}, type={self.transaction_type})>"
+

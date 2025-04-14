@@ -1,6 +1,8 @@
 import os
 from dotenv import load_dotenv
 
+# Load database url (and other potentially secret data) from .env file
+
 dotenv_path = os.path.join(os.getcwd(), 'login.env')
 load_dotenv(dotenv_path=dotenv_path)
 
