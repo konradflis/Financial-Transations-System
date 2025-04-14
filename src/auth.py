@@ -83,7 +83,7 @@ def verify_token_in_redis(token: str, user_id: int):
     return True
 
 
-def get_current_user(token: str = Depends(oauth2_scheme)) -> int:
+def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
     """
     Get the current user id.
     :param token: bearer token
@@ -94,6 +94,7 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> int:
         # Decode the token -- obtain the user data
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id = payload.get("user_id")
+        role = payload.get("role")
 
         token_key = f"user:{user_id}:token"
 
@@ -101,7 +102,7 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> int:
         if not r.exists(token_key):
             raise HTTPException(status_code=401, detail="Invalid token or user logged out")
 
-        return user_id
+        return {"user_id": user_id, "role": role}
 
     # Raise the exception when the token is invalid
     except jwt.PyJWTError:
@@ -121,3 +122,16 @@ def get_all_tokens() -> dict:
     tokens = {key.decode(): r.get(key).decode() for key in keys}
 
     return tokens
+
+
+def admin_required(token: str = Depends(oauth2_scheme)):
+    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    if payload.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admins only")
+    return payload
+
+
+def user_required(current_user=Depends(get_current_user)):
+    if current_user["role"] != "user":
+        raise HTTPException(status_code=403, detail="Users only!")
+    return current_user

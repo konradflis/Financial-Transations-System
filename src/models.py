@@ -24,6 +24,7 @@ class User(Base):
     email = Column(String(100), unique=True)  # Email
     username = Column(Integer, unique=True)  # 10 digit ID to log in
     password = Column(String(100))  # Password (TO DO: Encrypting)
+    role = Column(String(5))
 
     accounts = relationship("Account", back_populates="user")
 

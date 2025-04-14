@@ -35,7 +35,7 @@ def login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], db: Sessio
         raise HTTPException(status_code=400, detail="Invalid credentials")
 
     # Create a new token for the user
-    access_token = create_access_token(data={"sub": user.username, "user_id": user.id},
+    access_token = create_access_token(data={"sub": str(user.username), "user_id": str(user.id), "role": user.role},
                                        expires_delta=ACCESS_TOKEN_EXPIRE_MINUTES)
 
     # Store the token in redis temporarily
