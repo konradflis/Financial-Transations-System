@@ -6,7 +6,7 @@ interface DashboardData {
   message: string;
 }
 
-const Dashboard = () => {
+const AdminDashboard = () => {
   const [data, setData] = useState<DashboardData | null>(null); // Typ danych z backendu
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -89,4 +89,4 @@ const Dashboard = () => {
   );
 };
 
-export default Dashboard;
+export default AdminDashboard;

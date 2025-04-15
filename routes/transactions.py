@@ -33,6 +33,7 @@ def create_transfer(transfer_data: TransferRequest, db: Session = Depends(get_db
     # Raise the exception when sender account is not the user's account
     sender_account = db.query(Account).filter(Account.account_number == sender_account, Account.user_id == user_id).first()
     sender_id = sender_account.id
+
     if not sender_account:
         raise HTTPException(status_code=403, detail="You can only send money from your own account.")
 
@@ -41,7 +42,8 @@ def create_transfer(transfer_data: TransferRequest, db: Session = Depends(get_db
     if receiver_account:
         receiver_id = receiver_account.id
     else:
-        receiver_id = 0
+        receiver_id = 0 # default account for external transfers
+
     # Raise the exception when the sender has insufficient funds
     if sender_account.balance < amount:
         raise HTTPException(status_code=400, detail="Insufficient balance.")

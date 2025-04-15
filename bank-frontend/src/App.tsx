@@ -1,7 +1,8 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Login from "./Login";
 import ProtectedRoute from "./ProtectedRoute";
-import Dashboard from "./Dashboard";
+import AdminDashboard from "./AdminDashboard";
+import UserDashboard from "./UserDashboard";
 
 const App = () => {
   return (
@@ -12,11 +13,11 @@ const App = () => {
           path="/admin/dashboard"
           element={
             <ProtectedRoute requiredRole="admin">
-              <Dashboard />
+              <AdminDashboard />
             </ProtectedRoute>
           }
         />
-          <Route path="/user/dashboard" element={<Login />} />
+          <Route path="/user/dashboard" element={<UserDashboard />} />
       </Routes>
     </Router>
   );

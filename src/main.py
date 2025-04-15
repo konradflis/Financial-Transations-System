@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routes.transactions import router as transactions_router
 from routes.login import router as login_router
-from routes.admin_dashboard import router as admin_dashboard_router
+from routes.dashboard import router as dashboard_router
 from src.database import engine
 from src.models import Base
 
@@ -24,8 +24,7 @@ app.add_middleware(
 
 app.include_router(transactions_router)
 app.include_router(login_router)
-
-app.include_router(admin_dashboard_router)
+app.include_router(dashboard_router)
 
 
 # Create the defined tables

@@ -41,7 +41,7 @@ def login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], db: Sessio
     # Store the token in redis temporarily
     store_token_in_redis(user.id, access_token, ACCESS_TOKEN_EXPIRE_MINUTES)
 
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {"access_token": access_token, "token_type": "bearer", "role": user.role}
 
 
 @router.post("/logout")

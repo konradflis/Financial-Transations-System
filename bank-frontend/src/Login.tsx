@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { TextField, Button, Box, Typography } from "@mui/material";
+import backgroundImage from './assets/pexels-lkloeppel-466685.jpg'
 
 function Login() {
   const [loginID, setLoginID] = useState("");
@@ -25,7 +26,13 @@ function Login() {
         const data = await response.json();
         console.log(data);
         localStorage.setItem("token", data.access_token);
-        navigate("/admin/dashboard");
+        localStorage.setItem("role", data.role);
+
+        if (data.role === "admin") {
+          navigate("/admin/dashboard");
+        } else if (data.role === "user") {
+          navigate("/user/dashboard");
+        }
       } else {
         const err = await response.json();
         alert(`Błąd logowania: ${err.detail}`);
@@ -41,7 +48,11 @@ function Login() {
           display="flex"
           justifyContent="center"
           alignItems="center"
-          sx={{height: "100vh", bgcolor: "background.paper"}}
+          sx={{height: "100vh", bgcolor: "background.paper",
+          backgroundImage: `url(${backgroundImage})`,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+            backgroundRepeat: "no-repeat"}}
       >
         <Box
             width={{xs: "90%", sm: "70%", md: "50%"}}
@@ -49,8 +60,11 @@ function Login() {
             boxShadow={3}
             borderRadius={2}
             bgcolor="white"
+            sx={{bgcolor: "rgba(255, 255, 255, 0.75)",
+            backdropFilter: "blur(3px)",
+            border: "1px solid rgba(255, 255, 255, 0.2)"}}
         >
-          <Typography variant="h4" gutterBottom textAlign="center">
+          <Typography variant="h5" gutterBottom textAlign="center">
             Logowanie
           </Typography>
           <TextField
