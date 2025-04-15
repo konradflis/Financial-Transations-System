@@ -10,8 +10,8 @@ router = APIRouter()
 
 # Define the transfer model
 class TransferRequest(BaseModel):
-    sender_id: int
-    receiver_id: int
+    sender_account: str
+    receiver_account: str
     amount: float
 
 
@@ -26,23 +26,26 @@ def create_transfer(transfer_data: TransferRequest, db: Session = Depends(get_db
     :return: information about successful transer
     """
 
-    sender_id = transfer_data.sender_id
-    receiver_id = transfer_data.receiver_id
+    sender_account = transfer_data.sender_account
+    receiver_account = transfer_data.receiver_account
     amount = transfer_data.amount
 
     # Raise the exception when sender account is not the user's account
-    sender_account = db.query(Account).filter(Account.id == sender_id, Account.user_id == user_id).first()
+    sender_account = db.query(Account).filter(Account.account_number == sender_account, Account.user_id == user_id).first()
+    sender_id = sender_account.id
     if not sender_account:
         raise HTTPException(status_code=403, detail="You can only send money from your own account.")
 
-    # Raise the exception when receiver account is not found
-    receiver_account = db.query(Account).filter(Account.id == receiver_id).first()
-    if not receiver_account:
-        raise HTTPException(status_code=404, detail="Receiver account not found.")
-
+    # Check if receiver is in our database (if not, it is an external transfer)
+    receiver_account = db.query(Account).filter(Account.account_number == receiver_account).first()
+    if receiver_account:
+        receiver_id = receiver_account.id
+    else:
+        receiver_id = 0
     # Raise the exception when the sender has insufficient funds
     if sender_account.balance < amount:
         raise HTTPException(status_code=400, detail="Insufficient balance.")
+
 
     # Create a new transaction record
     transaction = Transaction(from_account_id=sender_id, to_account_id=receiver_id, amount=amount,
@@ -55,7 +58,8 @@ def create_transfer(transfer_data: TransferRequest, db: Session = Depends(get_db
 
     # Update balances on both accounts
     sender_account.balance -= amount
-    receiver_account.balance += amount
+    if receiver_account:
+        receiver_account.balance += amount
     db.commit()
 
     return {"message": "Transaction created", "transaction_id": transaction.id}

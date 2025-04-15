@@ -16,6 +16,7 @@ const App = () => {
             </ProtectedRoute>
           }
         />
+          <Route path="/user/dashboard" element={<Login />} />
       </Routes>
     </Router>
   );
