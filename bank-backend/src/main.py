@@ -5,11 +5,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from routes.transactions import router as transactions_router
 from routes.login import router as login_router
 from routes.dashboard import router as dashboard_router
+from routes.user import router as user_router
 from src.database import engine
 from src.models import Base
 
 # Connect to the local redis server
-r = redis.Redis(host='localhost', port=6379, db=0)
+r = redis.Redis(host='redis', port=6379, db=0)
 
 # Create an instance of a FastAPI app, add selected routes
 app = FastAPI()
@@ -25,6 +26,7 @@ app.add_middleware(
 app.include_router(transactions_router)
 app.include_router(login_router)
 app.include_router(dashboard_router)
+app.include_router(user_router)
 
 
 # Create the defined tables
