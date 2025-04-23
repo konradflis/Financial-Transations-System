@@ -14,6 +14,7 @@ class Account(Base):
     balance = Column(Float, default=0.0)  # Account balance
 
     user = relationship("User", back_populates="accounts")
+    card = relationship("Card", back_populates="cards")
 
 
 class User(Base):
@@ -31,7 +32,7 @@ class User(Base):
 
 class Transaction(Base):
     __tablename__ = 'transactions'
-    id = Column(Integer, primary_key=True, index=True) # PK: Transaction ID
+    id = Column(Integer, primary_key=True, index=True)  # PK: Transaction ID
     from_account_id = Column(Integer, ForeignKey('accounts.id'), nullable=True)  # FK: Source account ID
     to_account_id = Column(Integer, ForeignKey('accounts.id'), nullable=True)  # FK: Destination account ID
     amount = Column(Float, nullable=False)  # Amount
@@ -45,3 +46,17 @@ class Transaction(Base):
     def __repr__(self):
         return f"<Transaction(id={self.id}, amount={self.amount}, date={self.date}, type={self.transaction_type})>"
 
+
+class Card(Base):
+    __tablename__ = 'cards'
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey('accounts.id'))
+    pin = Column(String(4), nullable=False)
+    # TODO: potentially more columns
+
+    account = relationship("Account", back_populates="cards")
+
+
+# TODO: Create tables regarding withdrawals and deposits
+
+# TODO: Create table regarding ATMs

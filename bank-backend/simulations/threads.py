@@ -10,6 +10,7 @@ BASE_URL = "http://127.0.0.1:8000"
 
 tokens = {}
 
+
 def login_and_transfer(user):
     response = requests.post(f"{BASE_URL}/login", data=user)
     print(user, response)
@@ -21,6 +22,7 @@ def login_and_transfer(user):
         response = requests.post(f"{BASE_URL}/transfer", json=transfer_data, headers=headers)
         print(f"User {user['username']} transfer response: {response.json()}")
 
+
 threads = []
 for user in users:
     thread = threading.Thread(target=login_and_transfer, args=(user,))
@@ -29,3 +31,4 @@ for user in users:
 
 for thread in threads:
     thread.join()
+
