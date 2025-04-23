@@ -14,7 +14,7 @@ class Account(Base):
     balance = Column(Float, default=0.0)  # Account balance
 
     user = relationship("User", back_populates="accounts")
-    card = relationship("Card", back_populates="cards")
+    card = relationship("Card", back_populates="account")
 
 
 class User(Base):
@@ -54,7 +54,7 @@ class Card(Base):
     pin = Column(String(4), nullable=False)
     # TODO: potentially more columns
 
-    account = relationship("Account", back_populates="cards")
+    account = relationship("Account", back_populates="card")
 
 
 # TODO: Create tables regarding withdrawals and deposits

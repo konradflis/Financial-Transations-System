@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Box, Typography, Button, Paper, FormControl, InputLabel, Select, MenuItem,
-  Card, CardContent, CircularProgress, Table, TableCell, TableRow, TableBody, TableHead } from "@mui/material";
+  Card, CardContent, CircularProgress, Table, TableCell, TableRow, TableBody, TableHead,
+  Modal, TextField } from "@mui/material";
 
 interface Account {
   id: number;
@@ -24,11 +25,14 @@ const UserDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [selectedAccount, setSelectedAccount] = useState<number | null>(null);
+  const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [balance, setBalance] = useState<number | null>(null);
   const [balanceLoading, setBalanceLoading] = useState(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const navigate = useNavigate();
+  const [isTransferOpen, setIsTransferOpen] = useState(false);
+  const [receiver, setReceiver] = useState("");
+  const [amount, setAmount] = useState("");
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -79,7 +83,7 @@ const UserDashboard = () => {
       if (response.ok) {
         const accountsData = await response.json();
         setAccounts(accountsData);
-        setSelectedAccount(accountsData[0].id);
+        setSelectedAccount(accountsData[0]);
       } else {
         setError("Nie udało się pobrać kont użytkownika");
       }
@@ -131,31 +135,47 @@ const UserDashboard = () => {
 
   useEffect(() => {
     if (selectedAccount !== null) {
-      fetchBalance(selectedAccount);
-      fetchTransactions(selectedAccount);
+      fetchBalance(selectedAccount.id);
+      fetchTransactions(selectedAccount.id);
     }
   }, [selectedAccount]);
 
-  const handleAccountChange = async (event: any) => {
-    const accountId = event.target.value;
-    setSelectedAccount(accountId);
-    setBalance(null);
-    setBalanceLoading(true);
 
+  const handleTransfer = async () => {
     const token = localStorage.getItem("token");
+    if (!token || !selectedAccount) {
+      alert("Brak danych do wykonania przelewu.");
+      return;
+    }
 
     try {
-      const res = await fetch(`http://localhost:8000/user/account/${accountId}/balance`, {
+      const response = await fetch(`http://localhost:8000/transfer`, {
+        method: "POST",
         headers: {
+          "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
+        body: JSON.stringify({
+          sender_account: selectedAccount.name,
+          receiver_account: receiver,
+          amount: parseFloat(amount),
+        }),
       });
-      const data = await res.json();
-      setBalance(data.balance);
-    } catch (e) {
-      console.error("Błąd ładowania salda:", e);
-    } finally {
-      setBalanceLoading(false);
+
+      if (response.ok) {
+        alert("Przelew wykonany!");
+        setIsTransferOpen(false);
+        setReceiver("");
+        setAmount("");
+        fetchTransactions(selectedAccount.id); // odśwież transakcje
+        fetchBalance(selectedAccount.id);      // odśwież saldo
+      } else {
+        const errorData = await response.json();
+        alert(`Błąd: ${errorData.detail || "Nieznany błąd"}`);
+      }
+    } catch (err) {
+      console.error("Błąd przelewu:", err);
+      alert("Wystąpił błąd podczas wykonywania przelewu.");
     }
   };
 
@@ -196,9 +216,23 @@ const UserDashboard = () => {
               }}
           >
             <Box>
-              <Typography variant="h5" gutterBottom>
-                Serwis transakcyjny
-              </Typography>
+              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <Box>
+                  <Typography variant="h5" gutterBottom>
+                    Serwis transakcyjny
+                  </Typography>
+                </Box>
+
+                {/* Przycisk Wyloguj się */}
+                <Button
+                  variant="contained"
+                  color="secondary"
+                  onClick={handleLogout}
+                  sx={{ height: "40px" }} // Możesz dostosować wysokość, by pasował do tytułu
+                >
+                  Wyloguj się
+                </Button>
+              </Box>
               <Typography variant="subtitle1" gutterBottom>
                 {data?.message ?? "Twoje konto"}
               </Typography>
@@ -210,8 +244,10 @@ const UserDashboard = () => {
                 </Typography>
                 <Select
                     fullWidth
-                    value={selectedAccount}
-                    onChange={(e) => setSelectedAccount(Number(e.target.value))}
+                    value={selectedAccount?.id ? selectedAccount.id : ""}
+                    onChange={(e) => {const selectedAccount = accounts.find(acc => acc.id === e.target.value);
+                    setSelectedAccount(selectedAccount || null);}
+                    }
                     displayEmpty
                     variant="outlined"
                     size="small"
@@ -237,17 +273,18 @@ const UserDashboard = () => {
                           ? `${balance.toFixed(2)} PLN`
                           : "Brak danych"}
                 </Typography>
+                <Button
+                  sx={{ mt: 2 }}
+                  variant="contained"
+                  color="primary"
+                  fullWidth
+                  onClick={() => setIsTransferOpen(true)}
+                  disabled={!selectedAccount}
+                >
+                  Wykonaj przelew
+                </Button>
               </Box>
             </Box>
-
-            <Button
-                variant="contained"
-                color="secondary"
-                onClick={handleLogout}
-                fullWidth
-            >
-              Wyloguj się
-            </Button>
           </Box>
 
           {/* PRAWA STRONA */}
@@ -283,6 +320,57 @@ const UserDashboard = () => {
             </Table>
           </Box>
         </Paper>
+        <Modal
+          open={isTransferOpen}
+          onClose={() => setIsTransferOpen(false)}
+          aria-labelledby="transfer-modal"
+        >
+          <Box
+            sx={{
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              bgcolor: "background.paper",
+              p: 4,
+              borderRadius: 2,
+              boxShadow: 24,
+              minWidth: 300,
+            }}
+          >
+            <Typography id="transfer-modal" variant="h6" mb={2}>
+              Nowy przelew
+            </Typography>
+            <TextField
+              fullWidth
+              label="Odbiorca"
+              value={receiver}
+              onChange={(e) => setReceiver(e.target.value)}
+              sx={{ mb: 2 }}
+            />
+            <TextField
+              fullWidth
+              label="Kwota"
+              type="number"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              sx={{ mb: 2 }}
+            />
+            <Box display="flex" justifyContent="space-between">
+              <Button variant="outlined" onClick={() => setIsTransferOpen(false)}>
+                Anuluj
+              </Button>
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={() => handleTransfer()}
+                disabled={!receiver || !amount}
+              >
+                Zatwierdź
+              </Button>
+            </Box>
+          </Box>
+        </Modal>
       </Box>
   );
 }
