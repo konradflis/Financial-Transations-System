@@ -7,6 +7,7 @@ from routes.login import router as login_router
 from routes.dashboard import router as dashboard_router
 from routes.user import router as user_router
 from routes.atm_operations import router as withdrawal_router
+from routes.admin import router as admin_router
 from src.database import engine
 from src.models import Base
 
@@ -29,6 +30,7 @@ app.include_router(login_router)
 app.include_router(withdrawal_router)
 app.include_router(dashboard_router)
 app.include_router(user_router)
+app.include_router(admin_router)
 
 
 # Create the defined tables

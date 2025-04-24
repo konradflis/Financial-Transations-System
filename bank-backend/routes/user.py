@@ -31,7 +31,10 @@ def get_account_transactions(account_id: int, current_user: User = Depends(get_c
         raise HTTPException(status_code=404, detail="Account not found")
     transactions = db.query(Transaction).filter_by(from_account_id=account.id).all()
 
-    return [{"id": txn.id, "date": txn.date, "amount": txn.amount, "receiver": txn.to_account_id} for txn in
+
+    return [{"id": txn.id, "date": txn.date, "amount": txn.amount,
+             "receiver": db.query(Account).filter_by(id=txn.to_account_id).first().account_number,
+             "transaction_type": txn.transaction_type, "status": txn.status} for txn in
             transactions]
 
 

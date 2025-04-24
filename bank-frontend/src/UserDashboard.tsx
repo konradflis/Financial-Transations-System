@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { Box, Typography, Button, Paper, FormControl, InputLabel, Select, MenuItem,
   Card, CardContent, CircularProgress, Table, TableCell, TableRow, TableBody, TableHead,
   Modal, TextField } from "@mui/material";
+import { SelectChangeEvent } from '@mui/material/Select'
 
 interface Account {
   id: number;
@@ -18,6 +19,8 @@ interface Transaction {
   date: string;
   receiver: string;
   amount: number;
+  transaction_type: string;
+  status: string;
 }
 
 const UserDashboard = () => {
@@ -33,6 +36,35 @@ const UserDashboard = () => {
   const [isTransferOpen, setIsTransferOpen] = useState(false);
   const [receiver, setReceiver] = useState("");
   const [amount, setAmount] = useState("");
+
+  const [filters, setFilters] = useState({
+    date: '',
+    receiver: '',
+    amount: '',
+    transaction_type: '',
+    status: '',
+  });
+
+  const handleFilterChange = (
+    e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | SelectChangeEvent<string>
+  ) => {
+    const { name, value } = e.target;
+
+    setFilters((prevFilters) => ({
+      ...prevFilters,
+      [name]: value,
+    }));
+  };
+
+  const filteredTransactions = transactions.filter((tx) => {
+    return (
+      (filters.date ? tx.date.includes(filters.date) : true) &&
+      (filters.receiver ? tx.receiver.includes(filters.receiver) : true) &&
+      (filters.amount ? tx.amount.toString().includes(filters.amount) : true) &&
+      (filters.transaction_type ? tx.transaction_type.includes(filters.transaction_type) : true) &&
+      (filters.status ? tx.status.includes(filters.status) : true)
+    );
+  });
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -167,8 +199,8 @@ const UserDashboard = () => {
         setIsTransferOpen(false);
         setReceiver("");
         setAmount("");
-        fetchTransactions(selectedAccount.id); // odśwież transakcje
-        fetchBalance(selectedAccount.id);      // odśwież saldo
+        fetchTransactions(selectedAccount.id);
+        fetchBalance(selectedAccount.id);
       } else {
         const errorData = await response.json();
         alert(`Błąd: ${errorData.detail || "Nieznany błąd"}`);
@@ -188,191 +220,262 @@ const UserDashboard = () => {
   }
 
   return (
-      <Box
-          display="flex"
-          justifyContent="center"
-          alignItems="center"
-          sx={{height: "100vh", bgcolor: "background.default", p: 2}}
+    <Box
+      display="flex"
+      justifyContent="center"
+      alignItems="center"
+      sx={{ height: "100vh", bgcolor: "#B0E0E6", p: 2, overflow: "hidden" }}
+    >
+      <Paper
+        elevation={4}
+        sx={{
+          display: "flex",
+          flexDirection: "row",
+          width: "100%",
+          maxWidth: "1200px",
+          height: "auto",
+          p: 3,
+          gap: 4,
+          overflow: "auto",
+        }}
       >
-        <Paper
-            elevation={4}
-            sx={{
-              display: "flex",
-              flexDirection: "row",
-              width: "100%",
-              maxWidth: "1200px",
-              height: "95vh",
-              p: 3,
-              gap: 4,
-            }}
+        {/* LEWA STRONA */}
+        <Box
+          sx={{
+            width: "30%",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+          }}
         >
-          {/* LEWA STRONA */}
-          <Box
-              sx={{
-                width: "30%",
-                display: "flex",
-                flexDirection: "column",
-                justifyContent: "space-between",
-              }}
-          >
-            <Box>
-              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <Box>
-                  <Typography variant="h5" gutterBottom>
-                    Serwis transakcyjny
-                  </Typography>
-                </Box>
-
-                {/* Przycisk Wyloguj się */}
-                <Button
-                  variant="contained"
-                  color="secondary"
-                  onClick={handleLogout}
-                  sx={{ height: "40px" }} // Możesz dostosować wysokość, by pasował do tytułu
-                >
-                  Wyloguj się
-                </Button>
-              </Box>
-              <Typography variant="subtitle1" gutterBottom>
-                {data?.message ?? "Twoje konto"}
-              </Typography>
-
-              {/* Wybór konta */}
-              <Box mt={3}>
-                <Typography variant="body1" gutterBottom>
-                  Wybierz konto:
+          <Box>
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <Box>
+                <Typography variant="h5" gutterBottom>
+                  Serwis transakcyjny
                 </Typography>
-                <Select
-                    fullWidth
-                    value={selectedAccount?.id ? selectedAccount.id : ""}
-                    onChange={(e) => {const selectedAccount = accounts.find(acc => acc.id === e.target.value);
-                    setSelectedAccount(selectedAccount || null);}
-                    }
-                    displayEmpty
-                    variant="outlined"
-                    size="small"
-                >
-                  <MenuItem value="">
-                    <em>-- wybierz konto --</em>
-                  </MenuItem>
-                  {accounts.map((acc) => (
-                      <MenuItem key={acc.id} value={acc.id}>
-                        {acc.name}
-                      </MenuItem>
-                  ))}
-                </Select>
               </Box>
 
-              {/* Saldo */}
-              <Box mt={4}>
-                <Typography variant="h6">Saldo:</Typography>
-                <Typography variant="body1" color="primary">
-                  {balanceLoading
-                      ? "Ładowanie..."
-                      : balance !== null
-                          ? `${balance.toFixed(2)} PLN`
-                          : "Brak danych"}
-                </Typography>
-                <Button
-                  sx={{ mt: 2 }}
-                  variant="contained"
-                  color="primary"
-                  fullWidth
-                  onClick={() => setIsTransferOpen(true)}
-                  disabled={!selectedAccount}
-                >
-                  Wykonaj przelew
-                </Button>
-              </Box>
-            </Box>
-          </Box>
-
-          {/* PRAWA STRONA */}
-          <Box sx={{width: "70%", overflowY: "auto"}}>
-            <Typography variant="h5" gutterBottom>
-              Historia transakcji
-            </Typography>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Data</TableCell>
-                  <TableCell>Odbiorca</TableCell>
-                  <TableCell>Kwota</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {transactions.length > 0 ? (
-                    transactions.map((tx) => (
-                        <TableRow key={tx.id}>
-                          <TableCell>{tx.date}</TableCell>
-                          <TableCell>{tx.receiver}</TableCell>
-                          <TableCell>{tx.amount.toFixed(2)} PLN</TableCell>
-                        </TableRow>
-                    ))
-                ) : (
-                    <TableRow>
-                      <TableCell colSpan={3} align="center">
-                        Brak transakcji
-                      </TableCell>
-                    </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </Box>
-        </Paper>
-        <Modal
-          open={isTransferOpen}
-          onClose={() => setIsTransferOpen(false)}
-          aria-labelledby="transfer-modal"
-        >
-          <Box
-            sx={{
-              position: "absolute",
-              top: "50%",
-              left: "50%",
-              transform: "translate(-50%, -50%)",
-              bgcolor: "background.paper",
-              p: 4,
-              borderRadius: 2,
-              boxShadow: 24,
-              minWidth: 300,
-            }}
-          >
-            <Typography id="transfer-modal" variant="h6" mb={2}>
-              Nowy przelew
-            </Typography>
-            <TextField
-              fullWidth
-              label="Odbiorca"
-              value={receiver}
-              onChange={(e) => setReceiver(e.target.value)}
-              sx={{ mb: 2 }}
-            />
-            <TextField
-              fullWidth
-              label="Kwota"
-              type="number"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              sx={{ mb: 2 }}
-            />
-            <Box display="flex" justifyContent="space-between">
-              <Button variant="outlined" onClick={() => setIsTransferOpen(false)}>
-                Anuluj
-              </Button>
+              {/* Przycisk Wyloguj się */}
               <Button
                 variant="contained"
                 color="primary"
-                onClick={() => handleTransfer()}
-                disabled={!receiver || !amount}
+                onClick={handleLogout}
+                sx={{ height: "40px" }}
               >
-                Zatwierdź
+                Wyloguj
+              </Button>
+            </Box>
+            <Typography variant="subtitle1" gutterBottom>
+              {data?.message ?? "Twoje konto"}
+            </Typography>
+
+            {/* Wybór konta */}
+            <Box mt={3}>
+              <Typography variant="body1" gutterBottom>
+                Wybierz konto:
+              </Typography>
+              <Select
+                fullWidth
+                value={selectedAccount?.id ? selectedAccount.id : ""}
+                onChange={(e) => {
+                  const selectedAccount = accounts.find(acc => acc.id === e.target.value);
+                  setSelectedAccount(selectedAccount || null);
+                }}
+                displayEmpty
+                variant="outlined"
+                size="small"
+              >
+                <MenuItem value="">
+                  <em>-- wybierz konto --</em>
+                </MenuItem>
+                {accounts.map((acc) => (
+                  <MenuItem key={acc.id} value={acc.id}>
+                    {acc.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </Box>
+
+            {/* Saldo */}
+            <Box mt={4}>
+              <Typography variant="h6">Saldo:</Typography>
+              <Typography variant="body1" color="primary">
+                {balanceLoading
+                    ? "Ładowanie..."
+                    : balance !== null
+                        ? `${balance.toFixed(2)} PLN`
+                        : "Brak danych"}
+              </Typography>
+              <Button
+                sx={{ mt: 2 }}
+                variant="contained"
+                color="primary"
+                fullWidth
+                onClick={() => setIsTransferOpen(true)}
+                disabled={!selectedAccount}
+              >
+                Wykonaj przelew
               </Button>
             </Box>
           </Box>
-        </Modal>
-      </Box>
+        </Box>
+
+        {/* PRAWA STRONA */}
+        <Box sx={{ width: "70%", }}>
+          <Typography variant="h5" gutterBottom>
+            Historia transakcji
+          </Typography>
+          <Box sx={{ display: "flex", gap: 2, mb: 2 }}>
+            <TextField
+              label="Data"
+              variant="outlined"
+              size="small"
+              name="date"
+              value={filters.date}
+              onChange={handleFilterChange}
+              fullWidth
+            />
+            <TextField
+              label="Odbiorca"
+              variant="outlined"
+              size="small"
+              name="receiver"
+              value={filters.receiver}
+              onChange={handleFilterChange}
+              fullWidth
+            />
+            <TextField
+              label="Kwota"
+              variant="outlined"
+              size="small"
+              name="amount"
+              value={filters.amount}
+              onChange={handleFilterChange}
+              fullWidth
+            />
+            <FormControl fullWidth size="small">
+              <InputLabel>Typ</InputLabel>
+              <Select
+                label="Typ"
+                name="transaction_type"
+                value={filters.transaction_type}
+                onChange={handleFilterChange}
+              >
+                <MenuItem value="">all</MenuItem>
+                <MenuItem value="transfer">transfer</MenuItem>
+                <MenuItem value="withdrawal">withdrawal</MenuItem>
+                <MenuItem value="deposit">deposit</MenuItem>
+              </Select>
+            </FormControl>
+            <FormControl fullWidth size="small">
+              <InputLabel>Status</InputLabel>
+              <Select
+                label="Status"
+                name="status"
+                value={filters.status}
+                onChange={handleFilterChange}
+              >
+                <MenuItem value="">all</MenuItem>
+                <MenuItem value="pending">pending</MenuItem>
+                <MenuItem value="success">success</MenuItem>
+                <MenuItem value="cancelled">cancelled</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+          <Box
+            sx={{
+              maxHeight: "500px",
+              overflowY: "auto",
+            }}
+          >
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Data</TableCell>
+                <TableCell>Odbiorca</TableCell>
+                <TableCell>Kwota</TableCell>
+                <TableCell>Typ</TableCell>
+                <TableCell>Status</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {filteredTransactions.length > 0 ? (
+                filteredTransactions.map((tx) => (
+                  <TableRow key={tx.id}>
+                    <TableCell>{tx.date}</TableCell>
+                    <TableCell>{tx.receiver}</TableCell>
+                    <TableCell>{tx.amount.toFixed(2)} PLN</TableCell>
+                    <TableCell>{tx.transaction_type}</TableCell>
+                    <TableCell>{tx.status}</TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={5} align="center">
+                    Brak transakcji
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+          </Box>
+        </Box>
+      </Paper>
+
+      <Modal
+        open={isTransferOpen}
+        onClose={() => setIsTransferOpen(false)}
+        aria-labelledby="transfer-modal"
+      >
+        <Box
+          sx={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            bgcolor: "background.paper",
+            p: 4,
+            borderRadius: 2,
+            boxShadow: 24,
+            minWidth: 300,
+          }}
+        >
+          <Typography id="transfer-modal" variant="h6" mb={2}>
+            Nowy przelew
+          </Typography>
+          <TextField
+            fullWidth
+            label="Odbiorca"
+            value={receiver}
+            onChange={(e) => setReceiver(e.target.value)}
+            sx={{ mb: 2 }}
+          />
+          <TextField
+            fullWidth
+            label="Kwota"
+            type="number"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            sx={{ mb: 2 }}
+          />
+          <Box display="flex" justifyContent="space-between">
+            <Button variant="outlined" onClick={() => setIsTransferOpen(false)}>
+              Anuluj
+            </Button>
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={() => handleTransfer()}
+              disabled={!receiver || !amount}
+            >
+              Zatwierdź
+            </Button>
+          </Box>
+        </Box>
+      </Modal>
+    </Box>
   );
-}
+};
 
 export default UserDashboard;

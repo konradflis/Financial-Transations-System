@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from src.auth import admin_required, user_required
+from src.auth import admin_required, user_required, hash_password
 from src.database import get_db
 from src.models import User, Account, Atm_device
 from pydantic import BaseModel, constr
@@ -34,7 +34,7 @@ def create_user_admin(user: UserCreate, db: Session = Depends(get_db)):
         last_name=user.last_name,
         email=user.email,
         username=user.username,
-        password=user.password,
+        password=hash_password(user.password),
         role="user"
     )
 
