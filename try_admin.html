@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel Admina</title>
+</head>
+<body>
+    <h2>Logi Transakcji:</h2>
+    <ul id="logs"></ul>
+
+    <script>
+        const ws = new WebSocket("ws://127.0.0.1:8000/ws/admin");
+
+        ws.onopen = () => console.log("✅ Połączono z WebSocket!");
+        ws.onmessage = (event) => {
+            const logs = document.getElementById("logs");
+            const li = document.createElement("li");
+            li.textContent = event.data;
+            logs.appendChild(li);
+        };
+        ws.onclose = () => console.log("❌ WebSocket zamknięty.");
+        ws.onerror = (error) => console.error("❌ Błąd WebSocket:", error);
+    </script>
+</body>
+</html>
