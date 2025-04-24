@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from src.database import get_db
 from src.models import User, Account, Transaction
 from src.auth import get_current_user
+from pydantic import BaseModel
 
 router = APIRouter()
 
@@ -32,3 +33,7 @@ def get_account_transactions(account_id: int, current_user: User = Depends(get_c
 
     return [{"id": txn.id, "date": txn.date, "amount": txn.amount, "receiver": txn.to_account_id} for txn in
             transactions]
+
+
+
+

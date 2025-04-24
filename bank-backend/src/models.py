@@ -12,6 +12,7 @@ class Account(Base):
     account_number = Column(String(26), unique=True, index=True)  # Account number
     user_id = Column(Integer, ForeignKey('users.id'))  # FK: User
     balance = Column(Float, default=0.0)  # Account balance
+    status = Column(String(10))
 
     user = relationship("User", back_populates="accounts")
     card = relationship("Card", back_populates="account")
@@ -39,9 +40,11 @@ class Transaction(Base):
     transaction_type = Column(Enum("deposit", "withdrawal", "transfer", name="transaction_types"))  # Transaction type
     date = Column(DateTime, default=datetime.now(timezone.utc))  # Transaction date
     status = Column(Enum("pending", "completed", "failed", name="transaction_statuses"), default="pending")  # Transaction state
+    device_id=Column(Integer, ForeignKey('atm_devices.id'), nullable=True)
 
     from_account = relationship("Account", foreign_keys=[from_account_id])
     to_account = relationship("Account", foreign_keys=[to_account_id])
+    device = relationship("Atm_device",foreign_keys=[device_id])
 
     def __repr__(self):
         return f"<Transaction(id={self.id}, amount={self.amount}, date={self.date}, type={self.transaction_type})>"
@@ -57,6 +60,13 @@ class Card(Base):
     account = relationship("Account", back_populates="card")
 
 
+class Atm_device(Base):
+    __tablename__ = 'atm_devices'
+    id = Column(Integer, primary_key=True, index=True)
+    localization = Column(String(20), nullable=False)
+    status = Column(String(10), nullable=False)
+
+
 # TODO: Create tables regarding withdrawals and deposits
 
-# TODO: Create table regarding ATMs
+
