@@ -12,6 +12,7 @@ class Account(Base):
     account_number = Column(String(26), unique=True, index=True)  # Account number
     user_id = Column(Integer, ForeignKey('users.id'))  # FK: User
     balance = Column(Float, default=0.0)  # Account balance
+    status = Column(String(10))
 
     user = relationship("User", back_populates="accounts")
     card = relationship("Card", back_populates="account")

@@ -2,8 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from src.auth import admin_required, user_required
 from src.database import get_db
-from src.models import User
+from src.models import User, Account
 from pydantic import BaseModel
+import random
 
 
 router = APIRouter()
@@ -55,6 +56,60 @@ def delete_user(username: int, db: Session = Depends(get_db)):
     db.delete(user)
     db.commit()
     return {"message": f"User {username} deleted"}
+
+class AccountCreate(BaseModel):
+    user_id: int
+    initial_balance: float = 0.0
+
+def generate_account_number():
+    # Generowanie 26-cyfrowego numeru konta
+    return ''.join([str(random.randint(0, 9)) for _ in range(26)])
+
+@router.post("/admin/add-account", response_model=dict)
+def create_account(account: AccountCreate, db: Session = Depends(get_db)):
+    # Sprawdzenie czy użytkownik istnieje
+    user = db.query(User).filter(User.id == account.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Generowanie unikalnego numeru konta
+    while True:
+        account_number = generate_account_number()
+        existing_account = db.query(Account).filter(Account.account_number == account_number).first()
+        if not existing_account:
+            break  # numer jest unikalny
+
+    # Tworzenie konta
+    new_account = Account(
+        user_id=account.user_id,
+        account_number=account_number,
+        balance=account.initial_balance,
+        status="ok"
+    )
+
+    db.add(new_account)
+    db.commit()
+    db.refresh(new_account)
+
+
+    return {
+        "message": "Account created",
+        "account_id": new_account.id,
+        "account_number": new_account.account_number,
+        "length_account": len(account_number),
+    }
+
+@router.delete("/admin/delete-account", response_model=dict)
+def delete_account(account_number: str, db: Session = Depends(get_db)):
+    account = db.query(Account).filter(Account.account_number == account_number).first()
+
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    db.delete(account)
+    db.commit()
+    return {"message": f"Account {account_number} successfully deleted"}
+
 
 
 
