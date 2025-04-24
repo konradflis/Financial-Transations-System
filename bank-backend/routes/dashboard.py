@@ -12,7 +12,6 @@ router = APIRouter()
 def admin_dashboard(current_user=Depends(admin_required)):
     return {"message": "Welcome, admin!"}
 
-## dodawanie usera
 class UserCreate(BaseModel):
     first_name: str
     last_name: str
@@ -43,6 +42,19 @@ def create_user_admin(user: UserCreate, db: Session = Depends(get_db)):
     db.refresh(db_user)
 
     return {"message": "User created", "user_id": db_user.id}
+
+
+@router.delete("/admin/delete-user", response_model=dict)
+def delete_user(username: int, db: Session = Depends(get_db)):
+    # Sprawdź, czy użytkownik istnieje
+    user = db.query(User).filter(User.username == username).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Usuń użytkownika z bazy
+    db.delete(user)
+    db.commit()
+    return {"message": f"User {username} deleted"}
 
 
 
