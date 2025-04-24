@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from src.auth import admin_required, user_required
 from src.database import get_db
-from src.models import User, Account
-from pydantic import BaseModel
+from src.models import User, Account, Atm_device
+from pydantic import BaseModel, constr
 import random
 
 
@@ -110,6 +110,37 @@ def delete_account(account_number: str, db: Session = Depends(get_db)):
     db.commit()
     return {"message": f"Account {account_number} successfully deleted"}
 
+
+# Schemat danych wejściowych
+class AtmDeviceCreate(BaseModel):
+    localization: str #constr(min_length=1, max_length=20)
+    status: str #constr(min_length=1, max_length=10)
+
+@router.post("/admin/add-atm", response_model=dict)
+def create_atm(atm: AtmDeviceCreate, db: Session = Depends(get_db)):
+    try:
+        new_atm = Atm_device(
+            localization=atm.localization,
+            status=atm.status
+        )
+        db.add(new_atm)
+        db.commit()
+        db.refresh(new_atm)
+        return {"message": "ATM device created", "atm_id": new_atm.id}
+    except Exception as e:
+        print(f"Error: {e}")  # Logowanie błędu
+        raise HTTPException(status_code=500, detail=f"An error occurred: {e}")
+
+@router.delete("/admin/delete-atm", response_model=dict)
+def delete_atm(atm_id: int, db: Session = Depends(get_db)):
+    atm = db.query(Atm_device).filter(Atm_device.id == atm_id).first()
+
+    if not atm:
+        raise HTTPException(status_code=404, detail="ATM device not found")
+
+    db.delete(atm)
+    db.commit()
+    return {"message": f"ATM device with ID {atm_id} deleted"}
 
 
 
