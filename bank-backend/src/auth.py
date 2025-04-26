@@ -137,3 +137,19 @@ def user_required(token: str = Depends(oauth2_scheme)):
         raise HTTPException(status_code=403, detail="Users only")
     return payload
 
+
+def bank_employee_required(token: str = Depends(oauth2_scheme)):
+    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    if payload.get("role") not in ["user", "bank_emp"]:
+        raise HTTPException(status_code=403, detail="Bank employees only")
+    return payload
+
+
+def aml_required(token: str = Depends(oauth2_scheme)):
+    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    if payload.get("role") not in ["user", "aml"]:
+        raise HTTPException(status_code=403, detail="AML only")
+    return payload
+
+
+

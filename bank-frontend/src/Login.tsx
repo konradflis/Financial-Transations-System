@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { TextField, Button, Box, Typography } from "@mui/material";
 import backgroundImage from './assets/pexels-lkloeppel-466685.jpg'
+import logo from './assets/JKM_Bank_Logo.png'
 
 function Login() {
   const [loginID, setLoginID] = useState("");
@@ -32,6 +33,12 @@ function Login() {
           navigate("/admin/dashboard");
         } else if (data.role === "user") {
           navigate("/user/dashboard");
+        }
+        else if (data.role === "bank_emp") {
+          navigate("/bank_employee/dashboard");
+        }
+        else if (data.role === "aml") {
+          navigate("/aml/dashboard");
         }
       } else {
         const err = await response.json();
@@ -64,9 +71,23 @@ function Login() {
             backdropFilter: "blur(3px)",
             border: "1px solid rgba(255, 255, 255, 0.2)"}}
         >
-          <Typography variant="h5" gutterBottom textAlign="center">
+
+          <Box display="flex" justifyContent="center" mb={2}>
+            <img src={logo} alt="Logo" style={{ width: 'auto', height: 'auto', maxWidth: '128px', maxHeight: '128px' }} />
+          </Box>
+          <Typography variant="h5" gutterBottom textAlign="center" sx={{ fontWeight: 'bold', fontSize: '1.25rem' }}>
             Logowanie
           </Typography>
+
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            textAlign="center"
+            sx={{ mb: 2 }}
+          >
+          Wprowadź swój 10-cyfrowy login oraz hasło, aby się zalogować
+          </Typography>
+
           <TextField
               label="Login ID"
               variant="outlined"

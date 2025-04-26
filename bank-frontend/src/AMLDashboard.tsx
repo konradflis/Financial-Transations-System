@@ -4,15 +4,7 @@ import {
   Box, Typography, Button, Paper, Select, MenuItem, Table, TableHead, TableRow, TableCell,
   TableBody, Modal, TextField, FormControl, InputLabel, Checkbox, FormControlLabel, CircularProgress
 } from "@mui/material";
-import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from 'recharts';
 import {SelectChangeEvent} from "@mui/material/Select";
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
-import { Dayjs } from 'dayjs';
-import TopBar from './TopBar'
-import Footer from './Footer'
-import logo from './assets/JKM_Bank_Logo.png'
 
 interface DashboardData {
   message: string;
@@ -29,7 +21,7 @@ interface Transaction {
   device: string;
 }
 
-const AdminDashboard = () => {
+const AMLDashboard = () => {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -40,12 +32,6 @@ const AdminDashboard = () => {
   const [atmDevices, setAtmDevices] = useState<any[]>([]);
   const [selectedAtms, setSelectedAtms] = useState<Set<number>>(new Set());
   const [isDeleteATMOpen, setIsDeleteATMOpen] = useState(false);
-  const [granularity, setGranularity] = useState<'days' | 'hours' | 'minutes'>('days');
-  const [selectedStatus, setSelectedStatus] = useState<'pending' | "completed" | "failed" | null>(null);
-  const [transactionData, setTransactionData] = useState<{ time: string, count: number }[]>([]);
-const [startDate, setStartDate] = useState<Dayjs | null>(null);
-const [endDate, setEndDate] = useState<Dayjs | null>(null);
-
 
   const [filters, setFilters] = useState({
     date: '',
@@ -132,47 +118,6 @@ const [endDate, setEndDate] = useState<Dayjs | null>(null);
       }
     } catch (err) {
       console.error("Błąd pobierania transakcji:", err);
-    }
-  };
-
-  const fetchTransactionStats = async (granularity: string, status?: string, start?: string, end?: string) => {
-    const token = localStorage.getItem("token");
-
-    try {
-      const url = new URL("http://localhost:8000/admin/transaction-stats");
-      url.searchParams.append("granularity", granularity);
-      if (status && status !== "undefined") {
-        url.searchParams.append('status', status as string);
-      }
-
-      if (start) {
-        url.searchParams.append('start_date', start);
-      }
-
-      if (end) {
-        url.searchParams.append('end_date', end);
-      }
-
-      const response = await fetch(url.toString(), {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.length === 0) {
-          setTransactionData([]);
-        } else {
-          setTransactionData(data);
-        }
-      } else {
-        console.error('Błąd pobierania statystyk');
-        setTransactionData([]);
-      }
-    } catch (error) {
-      console.error('Błąd połączenia:', error);
-      setTransactionData([]);
     }
   };
 
@@ -273,24 +218,6 @@ const [endDate, setEndDate] = useState<Dayjs | null>(null);
     }
   };
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const options: Intl.DateTimeFormatOptions = {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    };
-    return date.toLocaleString('pl-PL', options);
-  };
-
-  useEffect(() => {
-    fetchTransactionStats(granularity, selectedStatus ?? undefined,
-        startDate ? startDate.toISOString().split('T')[0] : undefined,
-        endDate ? endDate.toISOString().split('T')[0] : undefined);
-  }, [granularity, selectedStatus, startDate, endDate]);
-
   useEffect(() => {
     fetchDashboard();
     fetchTransactions();
@@ -306,36 +233,12 @@ const [endDate, setEndDate] = useState<Dayjs | null>(null);
   }
 
   return (
-  <>
-
-    <TopBar onLogout={handleLogout} />
-    <Box
-      sx={{
-        display: "flex",
-        flexDirection: "column",
-        minHeight: "100vh",
-        pt: "64px",
-        pb: "64px",
-        position: "relative",
-        backgroundColor: "#eef1f3",
-        overflow: "hidden"
-      }}
-    >
-        <Box
-          component="main"
-          sx={{
-                flexGrow: 1,
-                bgcolor: "#eef1f3",
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                p: 2,
-                overflowY: "hidden",
-                scrollBehavior: "smooth",
-                backdropFilter: "blur(3px)",
-                border: "1px solid rgba(255, 255, 255, 0.2)"
-          }}
-        >
+      <Box
+          display="flex"
+          justifyContent="center"
+          alignItems="center"
+          sx={{height: "100vh", bgcolor: "#4682B4", p: 2, overflow: "hidden"}}
+      >
         <Paper
             elevation={4}
             sx={{
@@ -348,7 +251,7 @@ const [endDate, setEndDate] = useState<Dayjs | null>(null);
               gap: 4,
             }}
         >
-
+          {/* LEWA STRONA */}
           <Box
               sx={{
                 width: "30%",
@@ -360,18 +263,21 @@ const [endDate, setEndDate] = useState<Dayjs | null>(null);
             <Box>
               <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <Box>
-                  <Typography variant="h5" gutterBottom fontWeight="bold">
+                  <Typography variant="h5" gutterBottom>
                     Panel administratora
                   </Typography>
                 </Box>
 
-                <Box sx={{ display: "flex", alignItems: "center" }}>
-                  <img src={logo} alt="Logo" style={{ height: "64px", width: "64px" }} />
-                </Box>
+                {/* Przycisk Wyloguj się */}
+                <Button
+                  variant="contained"
+                  color="primary"
+                  onClick={handleLogout}
+                  sx={{ height: "40px" }}
+                >
+                  Wyloguj
+                </Button>
               </Box>
-              <Typography variant="subtitle1" gutterBottom>
-              {data?.message ?? "Twoje konto"}
-              </Typography>
               <Box>
                 <Button
                   sx={{ mt: 2 }}
@@ -389,14 +295,15 @@ const [endDate, setEndDate] = useState<Dayjs | null>(null);
                   fullWidth
                   onClick={() => setIsDeleteATMOpen(true)}
                 >
-                  Usuń bankomat
+                  Usuń wpłatomat
                 </Button>
               </Box>
             </Box>
           </Box>
 
-          <Box sx={{width: "70%", flexDirection: "column",}}>
-            <Typography variant="h5" gutterBottom fontWeight="bold">
+          {/* PRAWA STRONA */}
+          <Box sx={{width: "70%",}}>
+            <Typography variant="h5" gutterBottom>
               Historia transakcji
             </Typography>
             <Box sx={{ display: "flex", gap: 2, mb: 2 }}>
@@ -460,8 +367,8 @@ const [endDate, setEndDate] = useState<Dayjs | null>(null);
               >
                 <MenuItem value="">all</MenuItem>
                 <MenuItem value="pending">pending</MenuItem>
-                <MenuItem value="completed">completed</MenuItem>
-                <MenuItem value="failed">failed</MenuItem>
+                <MenuItem value="success">success</MenuItem>
+                <MenuItem value="cancelled">cancelled</MenuItem>
               </Select>
             </FormControl>
             <TextField
@@ -483,20 +390,20 @@ const [endDate, setEndDate] = useState<Dayjs | null>(null);
             <Table size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Data</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Nadawca</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Odbiorca</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Kwota</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Typ</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Status</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Urządzenie</TableCell>
+                  <TableCell>Data</TableCell>
+                  <TableCell>Nadawca</TableCell>
+                  <TableCell>Odbiorca</TableCell>
+                  <TableCell>Kwota</TableCell>
+                  <TableCell>Typ</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell>Urządzenie</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {filteredTransactions.length > 0 ? (
                     filteredTransactions.map((tx) => (
                         <TableRow key={tx.id}>
-                          <TableCell>{formatDate(tx.date)}</TableCell>
+                          <TableCell>{tx.date}</TableCell>
                           <TableCell>{tx.from_account_id}</TableCell>
                           <TableCell>{tx.to_account_id}</TableCell>
                           <TableCell>{tx.amount.toFixed(2)} PLN</TableCell>
@@ -514,91 +421,6 @@ const [endDate, setEndDate] = useState<Dayjs | null>(null);
                 )}
               </TableBody>
             </Table>
-          </Box>
-
-          <Box sx={{ mt: 4 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-              <Typography variant="h5" fontWeight="bold">
-                Analiza ruchu
-              </Typography>
-            </Box>
-
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
-              <FormControl size="small" sx={{ minWidth: 120, flex: 1 }}>
-                <InputLabel>Granulacja</InputLabel>
-                <Select
-                  value={granularity}
-                  onChange={(e) => setGranularity(e.target.value as 'days' | 'hours' | 'minutes')}
-                  size="small"
-                  sx={{ width: '100%' }}
-                >
-                  <MenuItem value="">Dni</MenuItem>
-                  <MenuItem value="days">Dni</MenuItem>
-                  <MenuItem value="hours">Godziny</MenuItem>
-                  <MenuItem value="minutes">Minuty</MenuItem>
-                </Select>
-              </FormControl>
-
-              <FormControl size="small" sx={{ minWidth: 120, flex: 1 }}>
-                <InputLabel>Stan</InputLabel>
-                <Select
-                  value={selectedStatus ?? ''}
-                  onChange={(e) => setSelectedStatus(e.target.value as "pending" | "completed" | "failed" | null)}
-                  size="small"
-                  sx={{ width: '100%' }}
-                >
-                  <MenuItem value="undefined">Wszystkie</MenuItem>
-                  <MenuItem value="pending">Oczekujące</MenuItem>
-                  <MenuItem value="completed">Zakończone</MenuItem>
-                  <MenuItem value="failed">Odrzucone</MenuItem>
-                </Select>
-              </FormControl>
-
-              <LocalizationProvider dateAdapter={AdapterDayjs}>
-                <DatePicker
-                  label="Data początkowa"
-                  value={startDate}
-                  onChange={(newValue) => setStartDate(newValue)}
-                  slotProps={{ textField: { size: 'small' } }}
-                  sx={{ flex: 1 }}
-                />
-                <DatePicker
-                  label="Data końcowa"
-                  value={endDate}
-                  onChange={(newValue) => setEndDate(newValue)}
-                  slotProps={{ textField: { size: 'small' } }}
-                  sx={{ flex: 1 }}
-                />
-              </LocalizationProvider>
-            </Box>
-          </Box>
-
-          <Box sx={{ width: '100%', height: 300, mt: 2 }}>
-            <ResponsiveContainer>
-              {transactionData.length === 0 ? (
-                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-                  <Typography variant="h6" color="textSecondary">
-                    Brak danych do wyświetlenia
-                  </Typography>
-                </Box>
-              ) : (
-                <LineChart data={transactionData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="time" />
-                  <YAxis
-                    label={{
-                      value: 'Liczba transakcji',
-                      angle: -90,
-                      position: 'insideLeft',
-                      allowDecimals: false,
-                      style: { textAnchor: 'middle' }
-                    }}
-                  />
-                  <Tooltip />
-                  <Line type="monotone" dataKey="count" stroke="#1976d2" strokeWidth={2} />
-                </LineChart>
-              )}
-            </ResponsiveContainer>
           </Box>
           </Box>
         </Paper>
@@ -671,12 +493,14 @@ const [endDate, setEndDate] = useState<Dayjs | null>(null);
               Wybierz wpłatomaty do usunięcia
             </Typography>
 
+            {/* Ładowanie i komunikat błędu */}
             {loading ? (
               <CircularProgress />
             ) : error ? (
               <Typography color="error">{error}</Typography>
             ) : (
               <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                {/* Lista wpłatomatów z checkboxami */}
                 {atmDevices.map((atm) => (
                   <FormControlLabel
                     key={atm.id}
@@ -708,11 +532,8 @@ const [endDate, setEndDate] = useState<Dayjs | null>(null);
             </Box>
           </Box>
         </Modal>
-        </Box>
       </Box>
-    <Footer />
-  </>
   );
 }
 
-export default AdminDashboard;
+export default AMLDashboard;

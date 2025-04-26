@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 router = APIRouter()
 
+
 @router.get("/user/accounts")
 def get_user_accounts(current_user: int = Depends(get_current_user), db: Session = Depends(get_db)):
     accounts = db.query(Account).filter_by(user_id=current_user).all()
