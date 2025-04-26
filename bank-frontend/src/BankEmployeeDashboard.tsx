@@ -326,6 +326,14 @@ const BankEmployeeDashboard = () => {
             <Typography variant="h5" gutterBottom fontWeight="bold">
               Dane użytkownika
             </Typography>
+            <Typography
+            variant="body2"
+            color="text.secondary"
+            textAlign="left"
+            sx={{ mb: 2 }}
+          >
+          Wprowadź ID użytkownika oraz jego adres e-mail, aby zobaczyć szczegółowe dane dotyczące kont.
+          </Typography>
             <Box sx={{ display: "flex", gap: 2, mb: 2 }}>
             <TextField
               label="ID użytkownika"
@@ -379,6 +387,47 @@ const BankEmployeeDashboard = () => {
                         Żaden użytkownik nie został wybrany
                       </TableCell>
                     </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </Box>
+          <Typography variant="h5" fontWeight="bold" sx={{ mt: 4 }}>
+            Konta użytkownika
+          </Typography>
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            textAlign="left"
+            sx={{ mb: 2 }}
+          >
+          Konta będą widoczne, jeśli powyżej zostaną wprowadzone poprawne dane dotyczące użytkownika.
+          </Typography>
+          <Box sx={{ maxHeight: "300px", overflowY: "auto" }}>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 'bold' }}>ID Konta</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Numer Konta</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Status</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Saldo</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {accounts.length > 0 ? (
+                  accounts.map((account) => (
+                    <TableRow key={account.id}>
+                      <TableCell>{account.id}</TableCell>
+                      <TableCell>{account.account_number}</TableCell>
+                      <TableCell>{account.status}</TableCell>
+                      <TableCell>{account.balance}</TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={4} align="center">
+                      Żaden użytkownik nie został wybrany
+                    </TableCell>
+                  </TableRow>
                 )}
               </TableBody>
             </Table>
