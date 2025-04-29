@@ -1,11 +1,10 @@
 
 services:
   redis:
-    image: redis:7.2.4-alpine
+    image: redis:alpine
     container_name: redis
     ports:
       - "6379:6379"
-    platform: linux/amd64
 
   bank-backend:
     build:
