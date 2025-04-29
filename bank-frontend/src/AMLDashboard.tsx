@@ -159,7 +159,7 @@ const AMLDashboard = () => {
         },
         body: JSON.stringify({
           localization: ATMLocalization,
-          status: "ready",
+          status: "active",
         }),
       });
 

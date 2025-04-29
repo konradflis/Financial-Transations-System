@@ -51,7 +51,7 @@ def create_transfer(transfer_data: TransferRequest, db: Session = Depends(get_db
 
     # Create a new transaction record
     transaction = Transaction(from_account_id=sender_id, to_account_id=receiver_id, amount=amount,
-                              transaction_type="transfer", status="pending")
+                              type="transfer", status="pending")
 
     # Add the record to the database
     db.add(transaction)

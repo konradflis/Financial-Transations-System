@@ -82,7 +82,7 @@ def create_account(account: AccountCreate, db: Session = Depends(get_db), curren
         user_id=account.user_id,
         account_number=account_number,
         balance=account.initial_balance,
-        status="ok"
+        status="active"
     )
 
     db.add(new_account)

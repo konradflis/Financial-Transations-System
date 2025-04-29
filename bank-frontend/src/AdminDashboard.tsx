@@ -214,7 +214,7 @@ const [endDate, setEndDate] = useState<Dayjs | null>(null);
         },
         body: JSON.stringify({
           localization: ATMLocalization,
-          status: "ready",
+          status: "active",
         }),
       });
 

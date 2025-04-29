@@ -87,7 +87,7 @@ def withdraw_funds(withdrawal_data: ATMOperationModel, db: Session = Depends(get
         "amount": new_transaction.amount,
         "transaction_type": new_transaction.type,
         "date": new_transaction.date,
-        "status": new_transaction.transaction_status,
+        "status": new_transaction.status,
         "device_id": new_transaction.device_id
     }
     verification_response = requests.post("http://localhost:8000/verify-transaction-auto", json=verification_payload)
