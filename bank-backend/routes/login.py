@@ -8,7 +8,7 @@ from src.database import get_db
 from src.auth import verify_password, create_access_token, store_token_in_redis
 from datetime import timedelta
 
-r = redis.Redis(host='localhost', port=6379, db=0)
+r = redis.Redis(host='redis', port=6379, db=0)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 router = APIRouter()
 

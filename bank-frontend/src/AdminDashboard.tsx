@@ -41,7 +41,7 @@ const AdminDashboard = () => {
   const [selectedAtms, setSelectedAtms] = useState<Set<number>>(new Set());
   const [isDeleteATMOpen, setIsDeleteATMOpen] = useState(false);
   const [granularity, setGranularity] = useState<'days' | 'hours' | 'minutes'>('days');
-  const [selectedStatus, setSelectedStatus] = useState<'pending' | "completed" | "failed" | null>(null);
+  const [selectedStatus, setSelectedStatus] = useState<'pending' | "completed" | "cancelled" | "failed" | null>(null);
   const [transactionData, setTransactionData] = useState<{ time: string, count: number }[]>([]);
 const [startDate, setStartDate] = useState<Dayjs | null>(null);
 const [endDate, setEndDate] = useState<Dayjs | null>(null);
@@ -461,6 +461,7 @@ const [endDate, setEndDate] = useState<Dayjs | null>(null);
                 <MenuItem value="">all</MenuItem>
                 <MenuItem value="pending">pending</MenuItem>
                 <MenuItem value="completed">completed</MenuItem>
+                <MenuItem value="cancelled">cancelled</MenuItem>
                 <MenuItem value="failed">failed</MenuItem>
               </Select>
             </FormControl>
@@ -543,13 +544,14 @@ const [endDate, setEndDate] = useState<Dayjs | null>(null);
                 <InputLabel>Stan</InputLabel>
                 <Select
                   value={selectedStatus ?? ''}
-                  onChange={(e) => setSelectedStatus(e.target.value as "pending" | "completed" | "failed" | null)}
+                  onChange={(e) => setSelectedStatus(e.target.value as "pending" | "completed" | "cancelled" | "failed" | null)}
                   size="small"
                   sx={{ width: '100%' }}
                 >
                   <MenuItem value="undefined">Wszystkie</MenuItem>
                   <MenuItem value="pending">Oczekujące</MenuItem>
                   <MenuItem value="completed">Zakończone</MenuItem>
+                  <MenuItem value="cancelled">Anulowane</MenuItem>
                   <MenuItem value="failed">Odrzucone</MenuItem>
                 </Select>
               </FormControl>

@@ -35,7 +35,7 @@ def get_account_transactions(account_id: int, current_user: User = Depends(get_c
 
     return [{"id": txn.id, "date": txn.date, "amount": txn.amount,
              "receiver": db.query(Account).filter_by(id=txn.to_account_id).first().account_number,
-             "transaction_type": txn.transaction_type, "status": txn.status} for txn in
+             "transaction_type": txn.type, "status": txn.transaction_status} for txn in
             transactions]
 
 
