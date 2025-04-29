@@ -3,7 +3,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPExce
 from sqlalchemy.orm import Session
 from src.auth import bank_employee_required, hash_password
 from src.database import get_db
-from src.models import User, Account, Atm_device
+from src.models import User, Account, AtmDevice
 import random
 from pydantic import BaseModel, constr
 from typing import Optional, List

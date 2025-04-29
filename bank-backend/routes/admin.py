@@ -4,7 +4,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPExce
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from src.database import get_db
-from src.models import Transaction, Atm_device
+from src.models import Transaction, AtmDevice
 from src.auth import admin_required
 import asyncio
 from fastapi.responses import StreamingResponse, JSONResponse
@@ -52,7 +52,7 @@ def get_transactions(db: Session = Depends(get_db), current_user=Depends(admin_r
 def get_atms(db: Session = Depends(get_db), current_user=Depends(admin_required)):
     """Zwraca listę bankomatów dla administratora"""
 
-    atms = db.query(Atm_device).all()
+    atms = db.query(AtmDevice).all()
     return atms
 
 async def event_stream():
@@ -73,7 +73,7 @@ class AtmDeviceCreate(BaseModel):
 @router.post("/admin/add-atm", response_model=dict)
 def create_atm(atm: AtmDeviceCreate, db: Session = Depends(get_db), current_user=Depends(admin_required)):
     try:
-        new_atm = Atm_device(
+        new_atm = AtmDevice(
             localization=atm.localization,
             status=atm.status
         )
@@ -86,7 +86,7 @@ def create_atm(atm: AtmDeviceCreate, db: Session = Depends(get_db), current_user
 
 @router.delete("/admin/delete-atm", response_model=dict)
 def delete_atm(atm_id: int, db: Session = Depends(get_db), current_user=Depends(admin_required)):
-    atm = db.query(Atm_device).filter(Atm_device.id == atm_id).first()
+    atm = db.query(AtmDevice).filter(AtmDevice.id == atm_id).first()
 
     if not atm:
         raise HTTPException(status_code=404, detail="ATM device not found")

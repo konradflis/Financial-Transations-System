@@ -1,6 +1,6 @@
 # backend/Dockerfile
 
-FROM python:3.11-slim
+FROM --platform=linux/arm64 python:3.11-slim
 
 WORKDIR /app
 

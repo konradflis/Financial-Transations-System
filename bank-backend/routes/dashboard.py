@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from src.auth import admin_required, user_required, bank_employee_required, aml_required, hash_password
 from src.database import get_db
-from src.models import User, Account, Atm_device
+from src.models import User, Account, AtmDevice
 
 
 router = APIRouter()
