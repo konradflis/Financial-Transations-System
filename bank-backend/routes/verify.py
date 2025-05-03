@@ -15,7 +15,7 @@ class TransactionVerificationModel(BaseModel):
     from_account_id: int
     to_account_id: int
     amount: float
-    transaction_type: str
+    type: str
     status: str
     date: datetime
     device_id: int

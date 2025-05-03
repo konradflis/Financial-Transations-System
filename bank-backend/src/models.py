@@ -12,7 +12,6 @@ class Account(Base):
     account_number = Column(String(26), unique=True, index=True)  # Account number
     user_id = Column(Integer, ForeignKey('users.id'))  # FK: User
     balance = Column(Float, default=0.0)  # Account balance
-    # TODO: Zamienić ok na active
     status = Column(Enum("active", "busy", name="account_statuses"), default="active")
 
     user = relationship("User", back_populates="accounts")
@@ -28,7 +27,6 @@ class User(Base):
     username = Column(Integer, unique=True)  # 10 digit ID to log in
     password = Column(String(100))  # Password (TO DO: Encrypting)
     role = Column(String(5))
-    # TODO: Dodać do bazy
     status = Column(Enum("active", "disabled", name="user_statuses"), default="active")
 
     accounts = relationship("Account", back_populates="user")
@@ -37,7 +35,6 @@ class User(Base):
 class Transaction(Base):
     __tablename__ = 'transactions'
 
-    # TODO: W którymś polu skrócona nazwa
     id = Column(Integer, primary_key=True, index=True)  # PK: Transaction ID
     from_account_id = Column(Integer, ForeignKey('accounts.id'), nullable=True)  # FK: Source account ID
     to_account_id = Column(Integer, ForeignKey('accounts.id'), nullable=True)  # FK: Destination account ID
