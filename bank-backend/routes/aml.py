@@ -13,10 +13,36 @@ from datetime import datetime, timedelta, timezone
 import pytz
 import httpx
 
-
+class TransactionAction(BaseModel):
+    id: int
 
 router = APIRouter()
 r = redis.Redis(host='localhost', port=6379, db=0)
+
+@router.get("/aml/transactions")
+def get_transactions(db: Session = Depends(get_db), current_user=Depends(aml_required)):
+    """Zwraca listę transakcji dla administratora"""
+
+    transactions = db.query(Transaction).filter_by(status='aml_blocked').all()
+    return transactions
+
+@router.post("/aml/accept")
+def accept_transaction(transaction: TransactionAction, db: Session = Depends(get_db)):
+    tx = db.query(Transaction).filter(Transaction.id == transaction.id).first()
+    if not tx:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    tx.status = "completed"
+    db.commit()
+    return {"message": "Transaction accepted"}
+
+@router.post("/aml/reject")
+def reject_transaction(transaction: TransactionAction, db: Session = Depends(get_db)):
+    tx = db.query(Transaction).filter(Transaction.id == transaction.id).first()
+    if not tx:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    tx.status = "failed"
+    db.commit()
+    return {"message": "Transaction rejected"}
 
 @router.post("/aml/check")
 def check_transaction(data: dict, db: Session = Depends(get_db)):
