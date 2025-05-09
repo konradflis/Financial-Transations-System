@@ -5,8 +5,7 @@ from src.models import Transaction, Account
 from src.auth import get_current_user
 from pydantic import BaseModel
 
-
-import httpx
+from routes.aml import send_transaction_to_aml
 
 router = APIRouter()
 
@@ -16,20 +15,6 @@ class TransferRequest(BaseModel):
     sender_account: str
     receiver_account: str
     amount: float
-
-def send_transaction_to_aml(transaction_id: int, amount: float):
-    aml_url = "http://localhost:8000/aml/check"
-
-    data = {
-        "transaction_id": transaction_id,
-        "amount": amount,
-    }
-
-    try:
-        response = httpx.post(aml_url, json=data)
-        response.raise_for_status()
-    except httpx.HTTPError as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to notify AML service: {exc}")
 
 @router.post("/transfer")
 def create_transfer(transfer_data: TransferRequest, db: Session = Depends(get_db),

@@ -9,6 +9,8 @@ from pydantic import BaseModel, constr
 from typing import Optional, List
 
 import time
+from datetime import datetime, timedelta, timezone
+import httpx
 
 
 router = APIRouter()
@@ -32,9 +34,24 @@ def check_transaction(data: dict, db: Session = Depends(get_db)):
         pass
 
     elif transaction.type == "transfer":
-        if amount > 10000:
+
+
+        ## suspicious ammount:
+        if is_large_transaction(transaction.amount):
             transaction.status = "aml_blocked"
             print(f"Transaction {transaction_id} is suspicious!")
+
+        ## too many transactions in a short term (ex. 1 min, 5 transfers)
+
+        elif is_rapid_transactions(db, transaction.id):
+            transaction.status = "aml_blocked"
+            print(f"Transaction {transaction_id} is suspicious!")
+
+        ## strange time of transfer
+
+        ## analysis of user's profile
+
+        ##
         else:
             transaction.status = "aml_approved"
             print(f"Transaction {transaction_id} is normal.")
@@ -46,7 +63,48 @@ def check_transaction(data: dict, db: Session = Depends(get_db)):
     else:
         raise HTTPException(status_code=405, detail="Transaction error: wrong transaction type")
 
+    #simulation of changing statuses
     time.sleep(10)
     db.commit()
 
     return {"status": "checked", "new_status": transaction.status}
+
+
+
+## func used
+def send_transaction_to_aml(transaction_id: int, amount: float):
+    aml_url = "http://localhost:8000/aml/check"
+
+    data = {
+        "transaction_id": transaction_id,
+        "amount": amount,
+    }
+
+    try:
+        response = httpx.post(aml_url, json=data)
+        response.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to notify AML service: {exc}")
+
+def is_large_transaction(amount: float, threshold: float = 10000) -> bool:
+    return amount > threshold
+
+
+
+def is_rapid_transactions(db, account_id: int, threshold: int = 5) -> bool:
+    """
+    Sprawdza, czy liczba transakcji z danego konta w ciągu ostatnich 5 minut przekracza określony próg.
+
+    :param db: sesja bazy danych
+    :param account_id: ID konta nadawcy (from_account_id)
+    :param threshold: maksymalna liczba transakcji w oknie 5 minut
+    :return: True jeśli liczba transakcji przekracza próg
+    """
+    five_minutes_ago = datetime.now(timezone.utc) - timedelta(minutes=5)
+
+    count = db.query(Transaction).filter(
+        Transaction.from_account_id == account_id,
+        Transaction.date >= five_minutes_ago
+    ).count()
+
+    return count > threshold
