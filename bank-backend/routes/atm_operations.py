@@ -11,18 +11,26 @@ import requests
 router = APIRouter()
 
 
-# Model operacji w bankomacie
-class ATMOperationModel(BaseModel):
+# Model weryfikacji urządzenia
+class ATMVerificationModel(BaseModel):
     card_id: int
     atm_id: int
-    amount: float
 
+
+# Model weryfikacji klienta
+class PINVerificationModel(BaseModel):
+    card_id: int
+    pin: str
+
+
+# Model operacji w bankomacie
 class ATMOperationModelPIN(BaseModel):
     card_id: int
     atm_id: int
     amount: float
-    pin: str
 
+
+# Model żądania potwierdzenia
 class ConfirmationRequest(BaseModel):
     transaction_id: int
 
@@ -38,8 +46,38 @@ def assign_atm(db: Session = Depends(get_db)):
     return {"atm_id": atm_active.id}
 
 
+@router.post("/atm-free")
+def free_atm(atm_id, db: Session = Depends(get_db)):
+
+    # Zwolnienie bankomatu przy anulowaniu operacji
+    atm_data = db.query(AtmDevice).filter(AtmDevice.id == atm_id).first()
+    if not atm_data:
+        raise HTTPException(status_code=404, detail="Bankomat nie istnieje.")
+
+    atm_data.status = 'active'
+    db.commit()
+    db.refresh(atm_data)
+
+    return {"message": "ok"}
+
+
+@router.post("/account-free")
+def free_atm(account_id, db: Session = Depends(get_db)):
+
+    # Zwolnienie konta przy anulowaniu operacji
+    account_data = db.query(Account).filter(Account.id == account_id).first()
+    if not account_data:
+        raise HTTPException(status_code=404, detail="Nie rozpoznano konta.")
+
+    account_data.status = 'active'
+    db.commit()
+    db.refresh(account_data)
+
+    return {"message": "ok"}
+
+
 @router.post("/atm-operation/verification")
-def verify_atm_operation(operation_data: ATMOperationModel, db: Session = Depends(get_db)):
+def verify_atm_operation(operation_data: ATMVerificationModel, db: Session = Depends(get_db)):
 
     """
     Weryfikacja warunków do przeprowadzenia operacji w bankomacie, tj. czy karta i bankomat "działają".
@@ -52,7 +90,6 @@ def verify_atm_operation(operation_data: ATMOperationModel, db: Session = Depend
 
     card_id = operation_data.card_id
     atm_id = operation_data.atm_id
-    amount = operation_data.amount
 
     # Sprawdzenie, czy bankomat istnieje
     atm_data = db.query(AtmDevice).filter(AtmDevice.id == atm_id).first()
@@ -70,9 +107,47 @@ def verify_atm_operation(operation_data: ATMOperationModel, db: Session = Depend
     # Sprawdzenie, czy karta może być obsłużona przez bankomat
     card_data = db.query(Card).filter(Card.id == card_id).first()
     if not card_data:
+
+        atm_data.status = 'active'
+        db.commit()
         raise HTTPException(status_code=404, detail="Nie rozpoznano karty.")
 
     return {"status": "ok"}
+
+
+@router.post("/pin-verification")
+def verify_pin(verification_data: PINVerificationModel, db: Session = Depends(get_db)):
+
+    # Weryfikacja pinu i klienta
+
+    card_id = verification_data.card_id
+    pin = verification_data.pin
+
+    card_data = db.query(Card).filter(Card.id == card_id).first()
+
+    # Sprawdzenie PIN-u podanego przez klienta (czy PIN pasuje do karty)
+    pin_data = db.query(Card).filter(Card.id == card_id, Card.pin == pin).first()
+    if not pin_data:
+        raise HTTPException(status_code=401, detail="Wprowadzony PIN jest niepoprawny.")
+
+    # Sprawdzenie, czy konto może być obsłużone (czy istnieje oraz, czy nie jest zablokowane)
+    # Sprawdzenie, czy użytkownik nie jest tymczasowo zablokowany
+    account_data = db.query(Account).filter(Account.id == card_data.account_id).first()
+    # user_data = db.query(User).filter(User.id == account_data.user_id).first()
+    if not account_data:
+        raise HTTPException(status_code=404, detail="Nie rozpoznano konta.")
+
+    if account_data.status == 'busy':
+        raise HTTPException(status_code=403, detail="Usługa tymczasowo niedostępna.")
+
+    # if user_data.status == 'disabled':
+    #    raise HTTPException(status_code=403, detail="Usługa tymczasowo niedostępna.")
+
+    account_data.status = 'active'
+    db.commit()
+    db.refresh(account_data)
+
+    return {"message": "ok"}
 
 
 @router.post("/atm-operation/withdrawal")
@@ -88,31 +163,10 @@ def withdraw_funds(withdrawal_data: ATMOperationModelPIN, db: Session = Depends(
     card_id = withdrawal_data.card_id
     atm_id = withdrawal_data.atm_id
     amount = withdrawal_data.amount
-    pin = withdrawal_data.pin
 
     atm_data = db.query(AtmDevice).filter(AtmDevice.id == atm_id).first()
     card_data = db.query(Card).filter(Card.id == card_id).first()
-
-    # Sprawdzenie PIN-u podanego przez klienta (czy PIN pasuje do karty)
-    pin_data = db.query(Card).filter(Card.id == card_id, Card.pin == pin).first()
-    if not pin_data:
-        raise HTTPException(status_code=401, detail="Wprowadzony PIN jest niepoprawny.")
-
-    # Sprawdzenie, czy konto może być obsłużone (czy istnieje oraz, czy nie jest zablokowane)
-    # Sprawdzenie, czy użytkownik nie jest tymczasowo zablokowany
     account_data = db.query(Account).filter(Account.id == card_data.account_id).first()
-    #user_data = db.query(User).filter(User.id == account_data.user_id).first()
-    if not account_data:
-        raise HTTPException(status_code=404, detail="Nie rozpoznano konta.")
-
-    account_data.status = 'active'
-    db.commit()
-    db.refresh(account_data)
-    if account_data.status == 'busy':
-        raise HTTPException(status_code=403, detail="Usługa tymczasowo niedostępna.")
-
-    #if user_data.status == 'disabled':
-    #    raise HTTPException(status_code=403, detail="Usługa tymczasowo niedostępna.")
 
     # Sprawdzenie, czy na koncie są wystarczające środki
     if account_data.balance < amount:
@@ -153,7 +207,7 @@ def withdraw_funds(withdrawal_data: ATMOperationModelPIN, db: Session = Depends(
         db.commit()  # Aktualizacja informacji w bazie
 
         return {"message": "Operacja odrzucona! Spróbuj ponownie później.", "status": "failure",
-                "transaction_id": new_transaction.transaction_id}
+                "transaction_id": new_transaction.id}
 
     # Jeżeli zwrócono completed — można finalizować transakcję
     elif verification_response.json()['status'] == 'completed':
@@ -161,12 +215,12 @@ def withdraw_funds(withdrawal_data: ATMOperationModelPIN, db: Session = Depends(
         new_transaction.transaction_status = 'completed'
         new_transaction.date = datetime.now()
         account_data.balance -= amount
-        account_data.status = 'active'
-        atm_data.status = 'active'
+        # account_data.status = 'active'    # statusy się jeszcze nie zmieniają — zmienią się dopiero po otrzymaniu potwierdzenia
+        # atm_data.status = 'active'
         db.commit()  # Aktualizacja informacji w bazie
 
         return {"message": "Withdrawal finished successfully!", "status": "success",
-                "transaction_id": new_transaction.transaction_id}
+                "transaction_id": new_transaction.id}
 
 
     # Jeśli weryfikacja się nie powiodła — transakcja wciąż oczekuje na ręczne zatwierdzenie
@@ -177,7 +231,7 @@ def withdraw_funds(withdrawal_data: ATMOperationModelPIN, db: Session = Depends(
 
         return {"message": "Operacja odrzucona! Na twoim koncie wykryto podejrzaną aktywność."
                            "Skontaktuj się z oddziałem banku.", "status": "pending",
-                "transaction_id": new_transaction.transaction_id}
+                "transaction_id": new_transaction.id}
 
 
 @router.get("/atm-operation/confirmation")
@@ -189,7 +243,7 @@ def get_confirmation(request: ConfirmationRequest, db: Session = Depends(get_db)
     transaction = db.query(Transaction).filter(Transaction.id == transaction_id).first()
 
     if transaction:
-        confirmation_txt = f"Data: {transaction.date}\nKwota: {transaction.amount}\nStatus: {transaction.transaction_status}"
+        confirmation_txt = f"Data: {transaction.date}\nKwota: {transaction.amount}\nStatus: {transaction.status}"
 
         return {"confirmation": confirmation_txt}
 

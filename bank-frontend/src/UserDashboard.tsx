@@ -8,6 +8,7 @@ import TopBar from './TopBar'
 import Footer from './Footer'
 import logo from './assets/JKM_Bank_Logo.png'
 
+
 interface Account {
   id: number;
   name: string;
@@ -43,10 +44,12 @@ const UserDashboard = () => {
   const [card_id, setCard_id] = useState<number | null>(null);
   const [atm_id, setATM_id] = useState<number | null>(null);
   const [isWithdrawalOpen, setIsWithdrawalOpen] = useState(false);
-  const [isPinOpen, setIsPinOpen] = useState(false);
+  const [isATMVerified, setIsATMVerified] = useState(false);
+  const [isAmountOpen, setIsAmountOpen] = useState(false);
   const [pin, setPin] = useState("");
   const [isConfirmationOpen, setIsConfirmationOpen] = useState(false);
   const [lastestTransaction, setLastestTransaction] = useState<number | null>(null);
+  const [confirmationData, setConfirmationData] = useState("");
 
   const [filters, setFilters] = useState({
     date: '',
@@ -219,17 +222,88 @@ const UserDashboard = () => {
       body: JSON.stringify({
         card_id: parseInt(card_id),
         atm_id: parseInt(atm_id),
-        amount: parseFloat(amount),
       }),
     });
       if (response.ok) {
-        const res = await response.json();
-        setIsPinOpen(true);
+        setIsATMVerified(true);
       }
     } catch (err) {
       console.error("Błąd przy wprowadzaniu karty.")
     }
   };
+
+  const verifyPIN = async () => {
+    const token = localStorage.getItem("token");
+    try {
+      const response = await fetch(`http://localhost:8000/pin-verification`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        card_id: parseInt(card_id),
+        pin: parseInt(pin),
+      }),
+    });
+      if (response.ok) {
+        setIsAmountOpen(true);
+      }
+    } catch (err) {
+      console.error("Błąd przy wprowadzaniu karty.")
+    }
+  };
+
+  const cancelWithdrawalStage1 = async () => {
+    const token = localStorage.getItem("token");
+    try {
+      const response = await fetch(`http://localhost:8000/atm-free`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        atm_id: parseInt(atm_id),
+      }),
+    });
+      if (response.ok) {
+        const res = await response.json();
+        setIsATMVerified(false);
+        setATM_id(null);
+        setIsWithdrawalOpen(false);
+      }
+    } catch (err) {
+      console.error("Nie rozpoznano bankomatu.")
+    }
+  };
+
+
+  const cancelWithdrawalStage2 = async () => {
+    const token = localStorage.getItem("token");
+    try {
+      const response = await fetch(`http://localhost:8000/account-free`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        account_id: parseInt(selectedAccount.id),
+      }),
+    });
+      if (response.ok) {
+        setPin(null);
+        setIsAmountOpen(false);
+      }
+
+      await cancelWithdrawalStage1();   // wywołanie też warunków dla zwolnienia urządzenia
+
+    } catch (err) {
+      console.error("Nie rozpoznano bankomatu.")
+    }
+  };
+
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -259,6 +333,7 @@ const UserDashboard = () => {
   useEffect(() => {
     if (isWithdrawalOpen) {
       fetchATM();
+      verifyATM();
     }
   }, [isWithdrawalOpen]);
 
@@ -324,7 +399,6 @@ const UserDashboard = () => {
           card_id: card_id,
           atm_id: atm_id,
           amount: parseFloat(amount),
-          pin: pin
         }),
       });
 
@@ -374,14 +448,19 @@ const UserDashboard = () => {
       });
 
       if (response.ok) {
-        const data = await response.json();
+        const data= await response.json();
+        setConfirmationData(data["confirmation"]);
 
         setIsWithdrawalOpen(false);
-        setIsPinOpen(false);
+        setIsAmountOpen(false);
         setPin("");
         setAmount("");
         setATM_id(null);
+        setIsAmountOpen(false);
         setIsConfirmationOpen(false);
+        setLastestTransaction(null);
+
+        await cancelWithdrawalStage2();
 
         fetchTransactions(selectedAccount.id);
         fetchBalance(selectedAccount.id);
@@ -687,9 +766,62 @@ const UserDashboard = () => {
           </Modal>
 
           <Modal
-            open={isWithdrawalOpen && Number.isFinite(atm_id)}
-            onClose={() => {setIsWithdrawalOpen(false); setATM_id(null)}}
+            open={isWithdrawalOpen && Number.isFinite(atm_id) && isATMVerified}
+            onClose={() => cancelWithdrawalStage1()}
             aria-labelledby="withdrawal-verification-modal"
+          >
+            <Box
+              sx={{
+                position: "absolute",
+                top: "50%",
+                left: "50%",
+                transform: "translate(-50%, -50%)",
+                bgcolor: "background.paper",
+                p: 4,
+                borderRadius: 2,
+                boxShadow: 24,
+                minWidth: 300,
+              }}
+            >
+
+              <Typography id="withdrawal-modal" variant="h6" mb={2}>
+                Proszę wprowadzić PIN:
+              </Typography>
+              <TextField
+                fullWidth
+                label="PIN"
+                type="password"
+                value={pin}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (/^\d{0,4}$/.test(value)) {
+                    setPin(value);
+                  }
+                }}
+                inputProps={{ maxLength: 4 }}
+                sx={{ mb: 2 }}
+              />
+              <Box display="flex" justifyContent="space-between">
+                <Button variant="outlined" onClick={() => cancelWithdrawalStage1()}>
+                  Anuluj
+                </Button>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  onClick={() => verifyPIN()}
+                  disabled={!isWithdrawalOpen || !atm_id || !isATMVerified}
+                >
+                  Zatwierdź
+                </Button>
+
+              </Box>
+            </Box>
+          </Modal>
+
+          <Modal
+            open={isWithdrawalOpen && Number.isFinite(atm_id) && isATMVerified && isAmountOpen}
+            onClose={() => cancelWithdrawalStage2()}
+            aria-labelledby="withdrawal-modal"
           >
             <Box
               sx={{
@@ -716,65 +848,14 @@ const UserDashboard = () => {
                 sx={{ mb: 2 }}
               />
               <Box display="flex" justifyContent="space-between">
-                <Button variant="outlined" onClick={() => {setIsWithdrawalOpen(false); setATM_id(null)}}>
-                  Anuluj
-                </Button>
-                <Button
-                  variant="contained"
-                  color="primary"
-                  onClick={() => verifyATM()}
-                  disabled={!isWithdrawalOpen || !atm_id}
-                >
-                  Zatwierdź
-                </Button>
-              </Box>
-            </Box>
-          </Modal>
-
-          <Modal
-            open={isWithdrawalOpen && Number.isFinite(atm_id) && isPinOpen}
-            onClose={() => {setIsWithdrawalOpen(false); setATM_id(null); setIsPinOpen(false)}}
-            aria-labelledby="withdrawal-modal"
-          >
-            <Box
-              sx={{
-                position: "absolute",
-                top: "50%",
-                left: "50%",
-                transform: "translate(-50%, -50%)",
-                bgcolor: "background.paper",
-                p: 4,
-                borderRadius: 2,
-                boxShadow: 24,
-                minWidth: 300,
-              }}
-            >
-              <Typography id="withdrawal-modal" variant="h6" mb={2}>
-                Proszę wprowadzić PIN:
-              </Typography>
-              <TextField
-                fullWidth
-                label="PIN"
-                type="password"
-                value={pin}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  if (/^\d{0,4}$/.test(value)) {
-                    setPin(value);
-                  }
-                }}
-                inputProps={{ maxLength: 4 }}
-                sx={{ mb: 2 }}
-              />
-              <Box display="flex" justifyContent="space-between">
-                <Button variant="outlined" onClick={() => {setIsWithdrawalOpen(false); setATM_id(null); setIsPinOpen(false)}}>
+                <Button variant="outlined" onClick={() => cancelWithdrawalStage2()}>
                   Anuluj
                 </Button>
                 <Button
                   variant="contained"
                   color="primary"
                   onClick={() => handleWithdrawal()}
-                  disabled={!isWithdrawalOpen || !atm_id || !isPinOpen}
+                  disabled={!isWithdrawalOpen || !atm_id || !isATMVerified || !isAmountOpen}
                 >
                   Zatwierdź
                 </Button>
@@ -784,7 +865,7 @@ const UserDashboard = () => {
 
           <Modal
             open={isConfirmationOpen}
-            onClose={() => setIsConfirmationOpen(false)}
+            onClose={() => {setIsConfirmationOpen(false); setIsAmountOpen(false); cancelWithdrawalStage2()}}
             aria-labelledby="confirmation-modal"
           >
             <Box
@@ -804,16 +885,50 @@ const UserDashboard = () => {
                 Wydrukować potwierdzenie transakcji?
               </Typography>
               <Box display="flex" justifyContent="space-between">
-                <Button variant="outlined" onClick={() => {setIsWithdrawalOpen(false); setATM_id(null); setIsPinOpen(false)}}>
+                <Button variant="outlined" onClick={() => {handleConfirmation(); setIsConfirmationOpen(false)}}>
                   TAK
                 </Button>
-                 <Button variant="outlined" onClick={() => {setIsWithdrawalOpen(false); setATM_id(null); setIsPinOpen(false)}}>
+                 <Button variant="outlined" onClick={() => {setIsConfirmationOpen(false); setIsAmountOpen(false); setAmount(""); setPin(""); cancelWithdrawalStage2()}}>
                   NIE
                 </Button>
 
               </Box>
             </Box>
           </Modal>
+
+          <Modal
+            open={confirmationData?.trim()}
+            onClose={() => setConfirmationData("")}
+            aria-labelledby="confirmation-show-modal"
+          >
+            <Box
+              sx={{
+                position: "absolute",
+                top: "50%",
+                left: "50%",
+                transform: "translate(-50%, -50%)",
+                bgcolor: "background.paper",
+                p: 4,
+                borderRadius: 2,
+                boxShadow: 24,
+                minWidth: 300,
+              }}
+            >
+              <Typography id="confirmation-show-modal" variant="h6" mb={2}>
+                Potwierdzenie
+              </Typography>
+              <Typography variant="body1">
+                {confirmationData}
+              </Typography>
+              <Box display="flex" justifyContent="space-between">
+                <Button variant="outlined" onClick={() => setConfirmationData("")}>
+                  OK!
+                </Button>
+
+              </Box>
+            </Box>
+          </Modal>
+
         </Box>
       </Box>
     <Footer />
