@@ -1,14 +1,23 @@
 from fastapi import APIRouter, Depends, HTTPException, Form, Query
 from sqlalchemy.orm import Session
 
-from routes.verify import TransactionVerificationModel
 from src.database import get_db
 from src.models import Transaction, Account, Card, AtmDevice, User
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, timezone
 import requests
+from routes.verify import router as verify_router
 
 router = APIRouter()
+router.include_router(verify_router)
+
+
+class AtmFreeRequest(BaseModel):
+    atm_id: int
+
+
+class AccountFreeRequest(BaseModel):
+    account_id: int
 
 
 # Model weryfikacji urządzenia
@@ -47,9 +56,10 @@ def assign_atm(db: Session = Depends(get_db)):
 
 
 @router.post("/atm-free")
-def free_atm(atm_id, db: Session = Depends(get_db)):
+def free_atm(atm_request: AtmFreeRequest, db: Session = Depends(get_db)):
 
     # Zwolnienie bankomatu przy anulowaniu operacji
+    atm_id = atm_request.atm_id
     atm_data = db.query(AtmDevice).filter(AtmDevice.id == atm_id).first()
     if not atm_data:
         raise HTTPException(status_code=404, detail="Bankomat nie istnieje.")
@@ -62,9 +72,10 @@ def free_atm(atm_id, db: Session = Depends(get_db)):
 
 
 @router.post("/account-free")
-def free_atm(account_id, db: Session = Depends(get_db)):
+def free_account(account_request: AccountFreeRequest, db: Session = Depends(get_db)):
 
     # Zwolnienie konta przy anulowaniu operacji
+    account_id = account_request.account_id
     account_data = db.query(Account).filter(Account.id == account_id).first()
     if not account_data:
         raise HTTPException(status_code=404, detail="Nie rozpoznano konta.")
@@ -103,6 +114,7 @@ def verify_atm_operation(operation_data: ATMVerificationModel, db: Session = Dep
     # Bankomat zostaje oznaczony jak zajęty
     atm_data.status = 'busy'
     db.commit()
+    db.refresh(atm_data)
 
     # Sprawdzenie, czy karta może być obsłużona przez bankomat
     card_data = db.query(Card).filter(Card.id == card_id).first()
@@ -110,6 +122,7 @@ def verify_atm_operation(operation_data: ATMVerificationModel, db: Session = Dep
 
         atm_data.status = 'active'
         db.commit()
+        db.refresh(atm_data)
         raise HTTPException(status_code=404, detail="Nie rozpoznano karty.")
 
     return {"status": "ok"}
@@ -143,7 +156,7 @@ def verify_pin(verification_data: PINVerificationModel, db: Session = Depends(ge
     # if user_data.status == 'disabled':
     #    raise HTTPException(status_code=403, detail="Usługa tymczasowo niedostępna.")
 
-    account_data.status = 'active'
+    account_data.status = 'busy'
     db.commit()
     db.refresh(account_data)
 
@@ -179,9 +192,10 @@ def withdraw_funds(withdrawal_data: ATMOperationModelPIN, db: Session = Depends(
     # Zablokowanie możliwości wykonywania innych operacji na koncie
     account_data.status = 'busy'
     db.commit()
+    db.refresh(account_data)
 
     # Nowy rekord transakcji
-    new_transaction = Transaction(from_account_id=account_data.id, to_account_id=None, amount=amount,
+    new_transaction = Transaction(from_account_id=account_data.id, to_account_id=0, amount=amount,
                                   type='withdrawal', date=datetime.now(), status='pending', device_id=atm_id)
     db.add(new_transaction)
     db.commit()
@@ -190,21 +204,15 @@ def withdraw_funds(withdrawal_data: ATMOperationModelPIN, db: Session = Depends(
     # Weryfikacja
     verification_payload = {
         "transaction_id": new_transaction.id,
-        "account_id": new_transaction.from_account_id,
-        "to_account_id": new_transaction.to_account_id,
-        "amount": new_transaction.amount,
-        "type": new_transaction.type,
-        "date": new_transaction.date,
-        "status": new_transaction.status,
-        "device_id": new_transaction.device_id
     }
     verification_response = requests.post("http://localhost:8000/verify-transaction-auto", json=verification_payload)
 
     # Jeżeli zwrócono kod błędu — transakcja odrzucona
     if verification_response.status_code != 200:
-        new_transaction.transaction_status = 'failed'
+        new_transaction.status = 'failed'
         new_transaction.date = datetime.now()
         db.commit()  # Aktualizacja informacji w bazie
+        db.refresh(new_transaction)
 
         return {"message": "Operacja odrzucona! Spróbuj ponownie później.", "status": "failure",
                 "transaction_id": new_transaction.id}
@@ -212,22 +220,22 @@ def withdraw_funds(withdrawal_data: ATMOperationModelPIN, db: Session = Depends(
     # Jeżeli zwrócono completed — można finalizować transakcję
     elif verification_response.json()['status'] == 'completed':
 
-        new_transaction.transaction_status = 'completed'
+        new_transaction.status = 'completed'
         new_transaction.date = datetime.now()
         account_data.balance -= amount
-        # account_data.status = 'active'    # statusy się jeszcze nie zmieniają — zmienią się dopiero po otrzymaniu potwierdzenia
-        # atm_data.status = 'active'
         db.commit()  # Aktualizacja informacji w bazie
+        db.refresh(new_transaction)
 
-        return {"message": "Withdrawal finished successfully!", "status": "success",
+        return {"message": "Operacja zakończona powodzeniem!", "status": "success",
                 "transaction_id": new_transaction.id}
 
 
     # Jeśli weryfikacja się nie powiodła — transakcja wciąż oczekuje na ręczne zatwierdzenie
     else:
-        new_transaction.transaction_status = 'pending'
+        new_transaction.status = 'pending'
         new_transaction.date = datetime.now()
         db.commit()  # Aktualizacja informacji w bazie
+        db.refresh(new_transaction)
 
         return {"message": "Operacja odrzucona! Na twoim koncie wykryto podejrzaną aktywność."
                            "Skontaktuj się z oddziałem banku.", "status": "pending",
@@ -235,10 +243,9 @@ def withdraw_funds(withdrawal_data: ATMOperationModelPIN, db: Session = Depends(
 
 
 @router.get("/atm-operation/confirmation")
-def get_confirmation(request: ConfirmationRequest, db: Session = Depends(get_db)):
+def get_confirmation(transaction_id: int, db: Session = Depends(get_db)):
 
     # Przygotowanie potwierdzenia
-    transaction_id = request.transaction_id
 
     transaction = db.query(Transaction).filter(Transaction.id == transaction_id).first()
 

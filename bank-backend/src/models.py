@@ -40,8 +40,8 @@ class Transaction(Base):
     to_account_id = Column(Integer, ForeignKey('accounts.id'), nullable=True)  # FK: Destination account ID
     amount = Column(Float, nullable=False)  # Amount
     type = Column(Enum("deposit", "withdrawal", "transfer", name="transaction_types"))  # Transaction type
-    date = Column(DateTime, default=datetime.now(timezone.utc))  # Transaction date
-    status = Column(Enum("pending", "completed", "failed", "cancelled", name="transaction_statuses"), default="pending")  # Transaction state
+    date = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone("Europe/Warsaw")))
+    status = Column(Enum("pending", "completed", "failed", "cancelled", "aml_processed", "aml_blocked", "aml_approved", name="transaction_statuses"), default="pending")  # Transaction state
     device_id = Column(Integer, ForeignKey('atm_devices.id'), nullable=True)
 
     from_account = relationship("Account", foreign_keys=[from_account_id])
