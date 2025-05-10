@@ -3,7 +3,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPExce
 from sqlalchemy.orm import Session
 from src.auth import aml_required, hash_password
 from src.database import get_db
-from src.models import User, Account, AtmDevice, Transaction
+from src.models import User, Account, AtmDevice, Transaction, AmlToControl
 import random
 from pydantic import BaseModel, constr
 from typing import Optional, List
@@ -24,6 +24,14 @@ def get_transactions(db: Session = Depends(get_db), current_user=Depends(aml_req
     """Zwraca listę transakcji dla administratora"""
 
     transactions = db.query(Transaction).filter_by(status='aml_blocked').all()
+
+    list_reasoning=[]
+    for transaction in transactions:
+        reason=db.query(AmlToControl).filter_by(transaction_id=transaction.id).all()
+        list_reasoning.append(reason)
+
+        ##TODO: dodać do frontu wykorzystanie list_reasoning aby wyświetlać w aml_dashboard jaki powód
+
     return transactions
 
 @router.post("/aml/accept")
@@ -95,12 +103,15 @@ def check_transaction(data: dict, db: Session = Depends(get_db)):
 
     if problems_found:
         transaction.status = "aml_blocked"
+        aml_transaction=AmlToControl(transaction_id=transaction.id,reasoning=",".join(problems_found))
+        db.add(aml_transaction)
     else:
         transaction.status = "aml_approved"
+        send_transaction_to_accept(transaction.id)
 
     db.commit()
 
-    send_transaction_to_accept(transaction.id)
+
 
     return {"status": "checked", "new_status": transaction.status}
 
