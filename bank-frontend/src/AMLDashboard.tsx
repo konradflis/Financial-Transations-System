@@ -32,6 +32,7 @@ const AMLDashboard = () => {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
+  const [reason, setReason] = useState<string | null>(null);
 
   const [filters, setFilters] = useState({
     date: '',
@@ -70,9 +71,29 @@ const AMLDashboard = () => {
     navigate("/");
   };
 
-  const handleOpen = (tx: Transaction) => {
+  const handleOpen = async (tx: Transaction) => {
     setSelectedTx(tx);
     setOpen(true);
+    const token = localStorage.getItem("token");
+
+    try {
+      const response = await fetch(`http://localhost:8000/aml/reason?id=${tx.id}`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const res = await response.json();
+        setReason(res.reasoning);
+      } else {
+        setReason("Brak powodu lub błąd podczas pobierania.");
+      }
+    } catch (err) {
+      console.error("Błąd przy pobieraniu powodu:", err);
+      setReason("Błąd serwera.");
+    }
   };
 
   const handleClose = () => {
@@ -167,6 +188,24 @@ const AMLDashboard = () => {
     const token = localStorage.getItem("token");
     try {
       const response = await fetch(`http://localhost:8000/aml/transactions`, {
+        headers: {Authorization: `Bearer ${token}`},
+      });
+
+      if (response.ok) {
+        const res: Transaction[] = await response.json();
+        setTransactions(res);
+      } else {
+        setTransactions([]);
+      }
+    } catch (err) {
+      console.error("Błąd pobierania transakcji:", err);
+    }
+  };
+
+  const fetchReason = async () => {
+    const token = localStorage.getItem("token");
+    try {
+      const response = await fetch(`http://localhost:8000/aml/reason`, {
         headers: {Authorization: `Bearer ${token}`},
       });
 
@@ -417,6 +456,12 @@ const AMLDashboard = () => {
             }}>
               <Typography variant="h6" component="h2">
                 Szczegóły Transakcji
+              </Typography>
+              <Typography variant="subtitle1" sx={{ mt: 2 }}>
+                Powód podejrzenia:
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 2 }}>
+                {reason || "Ładowanie..."}
               </Typography>
               <Typography sx={{ mt: 2 }}>
                 Czy chcesz zaakceptować tę transakcję?

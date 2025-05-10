@@ -31,8 +31,20 @@ def get_transactions(db: Session = Depends(get_db), current_user=Depends(aml_req
         list_reasoning.append(reason)
 
         ##TODO: dodać do frontu wykorzystanie list_reasoning aby wyświetlać w aml_dashboard jaki powód
+        ## [Konrad] Proponuję endpoint jak niżej:
 
     return transactions
+
+@router.get("/aml/reason")
+def get_reason(id: int, db: Session = Depends(get_db), current_user=Depends(aml_required)):
+    """Zwraca listę powodów podejrzeń"""
+    tx = db.query(Transaction).filter(Transaction.id == id).first()
+    if not tx:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    reason = db.query(AmlToControl).filter_by(transaction_id=id).first()
+    if not reason:
+        raise HTTPException(status_code=404, detail="Reason not found")
+    return reason
 
 @router.post("/aml/accept")
 def accept_transaction(transaction: TransactionAction, db: Session = Depends(get_db)):
