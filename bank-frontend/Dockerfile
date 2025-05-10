@@ -11,10 +11,9 @@ COPY bank-frontend .
 
 RUN npm run build
 
-# Etap serwera statycznego
-FROM --platform=linux/arm64 nginx:alpine
-
+FROM nginx:alpine
 COPY bank-frontend/nginx.conf /etc/nginx/nginx.conf
 COPY --from=build /app/build /usr/share/nginx/html
 
 EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
