@@ -24,7 +24,7 @@ def create_transfer(transfer_data: TransferRequest, db: Session = Depends(get_db
     :param transfer_data: sender id, receiver id, amount
     :param db: database session
     :param user_id: logged-in user id
-    :return: information about successful transer
+    :return: information about successful transfer
     """
 
     sender_account = transfer_data.sender_account
@@ -52,7 +52,7 @@ def create_transfer(transfer_data: TransferRequest, db: Session = Depends(get_db
 
     # Create a new transaction record
     transaction = Transaction(from_account_id=sender_id, to_account_id=receiver_id, amount=amount,
-                              type="transfer", status="aml_processed")
+                              type="transfer", status="pending")
 
     # Add the record to the database
     db.add(transaction)
@@ -62,10 +62,26 @@ def create_transfer(transfer_data: TransferRequest, db: Session = Depends(get_db
     send_transaction_to_aml(transaction.id, transfer_data.amount)
 
 
-    # Update balances on both accounts - to be moved to aml_system
-    """sender_account.balance -= amount
-    if receiver_account:
-        receiver_account.balance += amount
-    db.commit()"""
+
 
     return {"message": "Transaction created. AML Checking process in progress", "transaction_id": transaction.id}
+
+@router.post("/transfer/accept")
+def transfer_accept(data: dict, db: Session = Depends(get_db)):
+    transaction_id = data["transaction_id"]
+    transaction = db.query(Transaction).filter(Transaction.id == transaction_id).first()
+    db.commit()
+
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transaction not found.")
+
+    sender_account = db.query(Account).filter(Account.id == transaction.from_account_id).first()
+    sender_account.balance -= transaction.amount
+    if transaction.to_account_id:
+        receiver_account=db.query(Account).filter(Account.id == transaction.to_account_id).first()
+        receiver_account.balance += transaction.amount
+
+    transaction.status = "completed"
+
+    db.commit()
+

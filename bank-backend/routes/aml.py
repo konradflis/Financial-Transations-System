@@ -8,7 +8,7 @@ import random
 from pydantic import BaseModel, constr
 from typing import Optional, List
 
-import time
+
 from datetime import datetime, timedelta, timezone
 import pytz
 import httpx
@@ -35,6 +35,7 @@ def accept_transaction(transaction: TransactionAction, db: Session = Depends(get
     db.commit()
     return {"message": "Transaction accepted"}
 
+
 @router.post("/aml/reject")
 def reject_transaction(transaction: TransactionAction, db: Session = Depends(get_db)):
     tx = db.query(Transaction).filter(Transaction.id == transaction.id).first()
@@ -47,9 +48,10 @@ def reject_transaction(transaction: TransactionAction, db: Session = Depends(get
 @router.post("/aml/check")
 def check_transaction(data: dict, db: Session = Depends(get_db)):
     transaction_id = data["transaction_id"]
-    amount = data["amount"]
+
 
     transaction = db.query(Transaction).filter(Transaction.id == transaction_id).first()
+    transaction.status="aml_processed"
     db.commit()
 
     if not transaction:
@@ -77,7 +79,7 @@ def check_transaction(data: dict, db: Session = Depends(get_db)):
         # TODO: strange time of transfer <-- to be
 
         ## analysis of user's profile --> "does the user act as usually?"
-        if is_unusual_amount(transaction.from_account_id, transaction.amount, db):
+        if is_unusual_amount(db, transaction.from_account_id, transaction.amount):
             transaction.status = "aml_blocked"
             problems_found.append("is_unusual_amount")
 
@@ -95,6 +97,8 @@ def check_transaction(data: dict, db: Session = Depends(get_db)):
         transaction.status = "aml_approved"
 
     db.commit()
+
+    send_transaction_to_accept(transaction.id)
 
     return {"status": "checked", "new_status": transaction.status}
 
@@ -115,6 +119,17 @@ def send_transaction_to_aml(transaction_id: int, amount: float):
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=500, detail=f"Failed to notify AML service: {exc}")
 
+
+def send_transaction_to_accept(transaction_id: int):
+    transaction_accept="http://localhost:8000/transfer/accept"
+    data={"transaction_id": transaction_id}
+    try:
+        response = httpx.post(transaction_accept, json=data)
+        response.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to send to the acceptance module {exc}")
+
+
 def is_large_transaction(amount: float, threshold: float = 10000) -> bool:
     return amount > threshold
 
@@ -132,7 +147,7 @@ def is_rapid_transactions(db, account_id: int, threshold: int = 5, time_to_compa
 
     return count > threshold
 
-def is_unusual_amount(account_id: int, amount: float, db: Session, threshold: float = 3.0) -> bool:
+def is_unusual_amount(db: Session, account_id: int, amount: float, threshold: float = 3.0) -> bool:
     transactions = db.query(Transaction).filter(
         Transaction.from_account_id == account_id,
         Transaction.amount > 0
