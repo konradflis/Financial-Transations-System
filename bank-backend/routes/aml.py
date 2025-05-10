@@ -3,12 +3,12 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPExce
 from sqlalchemy.orm import Session
 from src.auth import aml_required, hash_password
 from src.database import get_db
-from src.models import User, Account, AtmDevice, Transaction
+from src.models import User, Account, AtmDevice, Transaction, AmlToControl
 import random
 from pydantic import BaseModel, constr
 from typing import Optional, List
 
-import time
+
 from datetime import datetime, timedelta, timezone
 import pytz
 import httpx
@@ -24,6 +24,14 @@ def get_transactions(db: Session = Depends(get_db), current_user=Depends(aml_req
     """Zwraca listę transakcji dla administratora"""
 
     transactions = db.query(Transaction).filter_by(status='aml_blocked').all()
+
+    list_reasoning=[]
+    for transaction in transactions:
+        reason=db.query(AmlToControl).filter_by(transaction_id=transaction.id).all()
+        list_reasoning.append(reason)
+
+        ##TODO: dodać do frontu wykorzystanie list_reasoning aby wyświetlać w aml_dashboard jaki powód
+
     return transactions
 
 @router.post("/aml/accept")
@@ -31,9 +39,12 @@ def accept_transaction(transaction: TransactionAction, db: Session = Depends(get
     tx = db.query(Transaction).filter(Transaction.id == transaction.id).first()
     if not tx:
         raise HTTPException(status_code=404, detail="Transaction not found")
-    tx.status = "completed"
-    db.commit()
+
+    ## moved the acceptance to next endpoint, to keep it consistent
+    send_transaction_to_accept(transaction.id)
+
     return {"message": "Transaction accepted"}
+
 
 @router.post("/aml/reject")
 def reject_transaction(transaction: TransactionAction, db: Session = Depends(get_db)):
@@ -47,9 +58,10 @@ def reject_transaction(transaction: TransactionAction, db: Session = Depends(get
 @router.post("/aml/check")
 def check_transaction(data: dict, db: Session = Depends(get_db)):
     transaction_id = data["transaction_id"]
-    amount = data["amount"]
+
 
     transaction = db.query(Transaction).filter(Transaction.id == transaction_id).first()
+    transaction.status="aml_processed"
     db.commit()
 
     if not transaction:
@@ -77,7 +89,7 @@ def check_transaction(data: dict, db: Session = Depends(get_db)):
         # TODO: strange time of transfer <-- to be
 
         ## analysis of user's profile --> "does the user act as usually?"
-        if is_unusual_amount(transaction.from_account_id, transaction.amount, db):
+        if is_unusual_amount(db, transaction.from_account_id, transaction.amount):
             transaction.status = "aml_blocked"
             problems_found.append("is_unusual_amount")
 
@@ -91,10 +103,15 @@ def check_transaction(data: dict, db: Session = Depends(get_db)):
 
     if problems_found:
         transaction.status = "aml_blocked"
+        aml_transaction=AmlToControl(transaction_id=transaction.id,reasoning=",".join(problems_found))
+        db.add(aml_transaction)
     else:
         transaction.status = "aml_approved"
+        send_transaction_to_accept(transaction.id)
 
     db.commit()
+
+
 
     return {"status": "checked", "new_status": transaction.status}
 
@@ -115,6 +132,17 @@ def send_transaction_to_aml(transaction_id: int, amount: float):
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=500, detail=f"Failed to notify AML service: {exc}")
 
+
+def send_transaction_to_accept(transaction_id: int):
+    transaction_accept="http://localhost:8000/transfer/accept"
+    data={"transaction_id": transaction_id}
+    try:
+        response = httpx.post(transaction_accept, json=data)
+        response.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to send to the acceptance module {exc}")
+
+
 def is_large_transaction(amount: float, threshold: float = 10000) -> bool:
     return amount > threshold
 
@@ -132,7 +160,7 @@ def is_rapid_transactions(db, account_id: int, threshold: int = 5, time_to_compa
 
     return count > threshold
 
-def is_unusual_amount(account_id: int, amount: float, db: Session, threshold: float = 3.0) -> bool:
+def is_unusual_amount(db: Session, account_id: int, amount: float, threshold: float = 3.0) -> bool:
     transactions = db.query(Transaction).filter(
         Transaction.from_account_id == account_id,
         Transaction.amount > 0
