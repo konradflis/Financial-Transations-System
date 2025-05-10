@@ -70,3 +70,19 @@ class AtmDevice(Base):
     status = Column(Enum("active", "busy", name="atm_statuses"), default="active")
 
 
+class AmlToControl(Base):
+    __tablename__ = 'aml_to_control'
+    id = Column(Integer, primary_key=True, index=True)
+    transaction_id = Column(Integer, ForeignKey('transactions.id'), nullable=True)
+    reasoning = Column(String(100), unique=False)
+    changed_by_id = Column(Integer, ForeignKey('users.id'), nullable=True)
+    change_date = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone("Europe/Warsaw")))
+
+    transaction=relationship("Transaction", foreign_keys=[transaction_id])
+    changed_by=relationship("User", foreign_keys=[changed_by_id])
+
+
+
+
+
+

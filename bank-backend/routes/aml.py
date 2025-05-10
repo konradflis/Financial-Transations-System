@@ -31,8 +31,10 @@ def accept_transaction(transaction: TransactionAction, db: Session = Depends(get
     tx = db.query(Transaction).filter(Transaction.id == transaction.id).first()
     if not tx:
         raise HTTPException(status_code=404, detail="Transaction not found")
-    tx.status = "completed"
-    db.commit()
+
+    ## moved the acceptance to next endpoint, to keep it consistent
+    send_transaction_to_accept(transaction.id)
+
     return {"message": "Transaction accepted"}
 
 
