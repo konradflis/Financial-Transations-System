@@ -5,6 +5,9 @@ import {
   TableBody, Modal, TextField, FormControl, InputLabel, Checkbox, FormControlLabel, CircularProgress
 } from "@mui/material";
 import {SelectChangeEvent} from "@mui/material/Select";
+import TopBar from "./TopBar";
+import Footer from "./Footer";
+import logo from "./assets/JKM_Bank_Logo.png";
 
 interface DashboardData {
   message: string;
@@ -15,7 +18,7 @@ interface Transaction {
   date: string;
   from_account_id: number;
   to_account_id: number;
-  transaction_type: string;
+  type: string;
   amount: number;
   status: string;
   device: string;
@@ -27,18 +30,15 @@ const AMLDashboard = () => {
   const [error, setError] = useState("");
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const navigate = useNavigate();
-  const [isCreateATMOpen, setIsCreateATMOpen] = useState(false);
-  const [ATMLocalization, setATMLocalization] = useState("");
-  const [atmDevices, setAtmDevices] = useState<any[]>([]);
-  const [selectedAtms, setSelectedAtms] = useState<Set<number>>(new Set());
-  const [isDeleteATMOpen, setIsDeleteATMOpen] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
 
   const [filters, setFilters] = useState({
     date: '',
     from_account_id: '',
     to_account_id: '',
     amount: '',
-    transaction_type: '',
+    type: '',
     status: '',
     device: ''
   });
@@ -59,7 +59,7 @@ const AMLDashboard = () => {
       (filters.to_account_id ? tx.to_account_id === Number(filters.to_account_id) : true) &&
       (filters.from_account_id ? tx.from_account_id === Number(filters.from_account_id) : true) &&
       (filters.amount ? tx.amount.toString().includes(filters.amount) : true) &&
-      (filters.transaction_type ? tx.transaction_type.includes(filters.transaction_type) : true) &&
+      (filters.type ? tx.type.includes(filters.type) : true) &&
       (filters.status ? tx.status.includes(filters.status) : true) &&
       (filters.device ? tx.device.includes(filters.device) : true)
     );
@@ -68,6 +68,66 @@ const AMLDashboard = () => {
   const handleLogout = () => {
     localStorage.removeItem("token");
     navigate("/");
+  };
+
+  const handleOpen = (tx: Transaction) => {
+    setSelectedTx(tx);
+    setOpen(true);
+  };
+
+  const handleClose = () => {
+    setOpen(false);
+    setSelectedTx(null);
+  };
+
+  const handleAccept = async () => {
+    if (!selectedTx) return;
+    const token = localStorage.getItem("token");
+
+    try {
+      const response = await fetch(`http://localhost:8000/aml/accept`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ id: selectedTx.id }),
+      });
+
+      if (response.ok) {
+        fetchTransactions(); // refresh the data
+        handleClose();
+      } else {
+        console.error("Nie udało się zaakceptować transakcji");
+      }
+    } catch (err) {
+      console.error("Błąd przy akceptacji transakcji:", err);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!selectedTx) return;
+    const token = localStorage.getItem("token");
+
+    try {
+      const response = await fetch(`http://localhost:8000/aml/reject`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ id: selectedTx.id }),
+      });
+
+      if (response.ok) {
+        fetchTransactions(); // refresh the data
+        handleClose();
+      } else {
+        console.error("Nie udało się odrzucić transakcji");
+      }
+    } catch (err) {
+      console.error("Błąd przy odrzucaniu transakcji:", err);
+    }
   };
 
   const fetchDashboard = async () => {
@@ -80,7 +140,7 @@ const AMLDashboard = () => {
     }
 
     try {
-      const response = await fetch("http://localhost:8000/admin/dashboard", {
+      const response = await fetch("http://localhost:8000/aml/dashboard", {
         method: "GET",
         headers: {
           "Authorization": `Bearer ${token}`,
@@ -106,7 +166,7 @@ const AMLDashboard = () => {
   const fetchTransactions = async () => {
     const token = localStorage.getItem("token");
     try {
-      const response = await fetch(`http://localhost:8000/admin/transactions`, {
+      const response = await fetch(`http://localhost:8000/aml/transactions`, {
         headers: {Authorization: `Bearer ${token}`},
       });
 
@@ -121,107 +181,21 @@ const AMLDashboard = () => {
     }
   };
 
-  const fetchAtmDevices = async () => {
-    setLoading(true);
-    const token = localStorage.getItem("token");
-    try {
-      const response = await fetch("http://localhost:8000/admin/atms", {
-        headers: {Authorization: `Bearer ${token}`},
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setAtmDevices(data);
-      } else {
-        setError("Nie udało się załadować wpłatomatów");
-      }
-    } catch (err) {
-      console.error("Błąd pobierania wpłatomatów:", err);
-      setError("Błąd połączenia");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleATMCreation = async () => {
-    const token = localStorage.getItem("token");
-
-    if (!token || !ATMLocalization) {
-      alert("Brak danych do utworzenia bankomatu.");
-      return;
-    }
-
-    try {
-      const response = await fetch("http://localhost:8000/admin/add-atm", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          localization: ATMLocalization,
-          status: "active",
-        }),
-      });
-
-      if (response.ok) {
-        alert("Bankomat utworzony!");
-        setATMLocalization("");
-      } else {
-        const errorData = await response.json();
-        alert(`Błąd: ${errorData.detail || "Nieznany błąd"}`);
-      }
-    } catch (err) {
-      console.error("Błąd tworzenia bankomatu:", err);
-      alert("Wystąpił błąd podczas tworzenia bankomatu.");
-    }
-  };
-
-  const handleCheckboxChange = (id: number) => {
-    setSelectedAtms((prevSelected) => {
-      const newSelected = new Set(prevSelected);
-      if (newSelected.has(id)) {
-        newSelected.delete(id);
-      } else {
-        newSelected.add(id);
-      }
-      return newSelected;
-    });
-  };
-
-  const deleteSelectedAtms = async () => {
-    const token = localStorage.getItem("token");
-    setLoading(true);
-    try {
-      for (let id of selectedAtms) {
-        const response = await fetch(`http://localhost:8000/admin/delete-atm?atm_id=${id}`, {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          alert(`Błąd przy usuwaniu wpłatomatu o ID ${id}: ${errorData.detail || "Nieznany błąd"}`);
-        }
-      }
-
-      alert("Wypłatomaty zostały usunięte!");
-      setSelectedAtms(new Set());
-      setIsDeleteATMOpen(false);
-      fetchAtmDevices();
-    } catch (err) {
-      console.error("Błąd usuwania wpłatomatów:", err);
-      alert("Wystąpił błąd podczas usuwania wpłatomatów.");
-    } finally {
-      setLoading(false);
-    }
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const options: Intl.DateTimeFormatOptions = {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    };
+    return date.toLocaleString('pl-PL', options);
   };
 
   useEffect(() => {
     fetchDashboard();
     fetchTransactions();
-    fetchAtmDevices();
   }, []);
 
   if (loading) {
@@ -233,12 +207,36 @@ const AMLDashboard = () => {
   }
 
   return (
-      <Box
-          display="flex"
-          justifyContent="center"
-          alignItems="center"
-          sx={{height: "100vh", bgcolor: "#4682B4", p: 2, overflow: "hidden"}}
-      >
+  <>
+
+    <TopBar onLogout={handleLogout} />
+    <Box
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        minHeight: "100vh",
+        pt: "64px",
+        pb: "64px",
+        position: "relative",
+        backgroundColor: "#eef1f3",
+        overflow: "hidden"
+      }}
+    >
+        <Box
+          component="main"
+          sx={{
+                flexGrow: 1,
+                bgcolor: "#eef1f3",
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                p: 2,
+                overflowY: "hidden",
+                scrollBehavior: "smooth",
+                backdropFilter: "blur(3px)",
+                border: "1px solid rgba(255, 255, 255, 0.2)"
+          }}
+        >
         <Paper
             elevation={4}
             sx={{
@@ -251,7 +249,7 @@ const AMLDashboard = () => {
               gap: 4,
             }}
         >
-          {/* LEWA STRONA */}
+
           <Box
               sx={{
                 width: "30%",
@@ -264,39 +262,13 @@ const AMLDashboard = () => {
               <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <Box>
                   <Typography variant="h5" gutterBottom>
-                    Panel administratora
+                    Panel AML
                   </Typography>
                 </Box>
 
-                {/* Przycisk Wyloguj się */}
-                <Button
-                  variant="contained"
-                  color="primary"
-                  onClick={handleLogout}
-                  sx={{ height: "40px" }}
-                >
-                  Wyloguj
-                </Button>
-              </Box>
-              <Box>
-                <Button
-                  sx={{ mt: 2 }}
-                  variant="contained"
-                  color="primary"
-                  fullWidth
-                  onClick={() => setIsCreateATMOpen(true)}
-                >
-                  Wprowadź bankomat
-                </Button>
-                <Button
-                  sx={{ mt: 2 }}
-                  variant="contained"
-                  color="primary"
-                  fullWidth
-                  onClick={() => setIsDeleteATMOpen(true)}
-                >
-                  Usuń wpłatomat
-                </Button>
+                <Box sx={{ display: "flex", alignItems: "center" }}>
+                  <img src={logo} alt="Logo" style={{ height: "64px", width: "64px" }} />
+                </Box>
               </Box>
             </Box>
           </Box>
@@ -304,7 +276,7 @@ const AMLDashboard = () => {
           {/* PRAWA STRONA */}
           <Box sx={{width: "70%",}}>
             <Typography variant="h5" gutterBottom>
-              Historia transakcji
+              Transakcje wymagające weryfikacji
             </Typography>
             <Box sx={{ display: "flex", gap: 2, mb: 2 }}>
             <TextField
@@ -347,8 +319,8 @@ const AMLDashboard = () => {
               <InputLabel>Typ</InputLabel>
               <Select
                 label="Typ"
-                name="transaction_type"
-                value={filters.transaction_type}
+                name="type"
+                value={filters.type}
                 onChange={handleFilterChange}
               >
                 <MenuItem value="">all</MenuItem>
@@ -397,19 +369,23 @@ const AMLDashboard = () => {
                   <TableCell>Typ</TableCell>
                   <TableCell>Status</TableCell>
                   <TableCell>Urządzenie</TableCell>
+                  <TableCell>Decyzja</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {filteredTransactions.length > 0 ? (
                     filteredTransactions.map((tx) => (
                         <TableRow key={tx.id}>
-                          <TableCell>{tx.date}</TableCell>
+                          <TableCell>{formatDate(tx.date)}</TableCell>
                           <TableCell>{tx.from_account_id}</TableCell>
                           <TableCell>{tx.to_account_id}</TableCell>
                           <TableCell>{tx.amount.toFixed(2)} PLN</TableCell>
-                          <TableCell>{tx.transaction_type}</TableCell>
+                          <TableCell>{tx.type}</TableCell>
                           <TableCell>{tx.status}</TableCell>
                           <TableCell>{tx.device}</TableCell>
+                          <TableCell>
+                            <Button onClick={() => handleOpen(tx)}>Oceń</Button>
+                          </TableCell>
                         </TableRow>
                     ))
                 ) : (
@@ -424,57 +400,8 @@ const AMLDashboard = () => {
           </Box>
           </Box>
         </Paper>
-        <Modal
-          open={isCreateATMOpen}
-          onClose={() => setIsCreateATMOpen(false)}
-          aria-labelledby="transfer-modal"
-        >
-          <Box
-            sx={{
-              position: "absolute",
-              top: "50%",
-              left: "50%",
-              transform: "translate(-50%, -50%)",
-              bgcolor: "background.paper",
-              p: 4,
-              borderRadius: 2,
-              boxShadow: 24,
-              minWidth: 300,
-            }}
-          >
-            <Typography id="transfer-modal" variant="h6" mb={2}>
-              Nowy bankomat
-            </Typography>
-            <TextField
-              fullWidth
-              label="Lokalizacja"
-              value={ATMLocalization}
-              onChange={(e) => setATMLocalization(e.target.value)}
-              sx={{ mb: 2 }}
-            />
-            <Box display="flex" justifyContent="space-between">
-              <Button variant="outlined" onClick={() => setIsCreateATMOpen(false)}>
-                Anuluj
-              </Button>
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={() => handleATMCreation()}
-                disabled={!ATMLocalization}
-              >
-                Zatwierdź
-              </Button>
-            </Box>
-          </Box>
-        </Modal>
-        <Modal
-          open={isDeleteATMOpen}
-          onClose={() => setIsDeleteATMOpen(false)}
-          aria-labelledby="modal-title"
-          aria-describedby="modal-description"
-        >
-          <Box
-            sx={{
+          <Modal open={open} onClose={handleClose} >
+            <Box sx={{
               position: "absolute",
               top: "50%",
               left: "50%",
@@ -487,52 +414,23 @@ const AMLDashboard = () => {
               overflowY: "auto",
               width: "80%",
               maxWidth: "600px",
-            }}
-          >
-            <Typography id="modal-title" variant="h6" component="h2" gutterBottom>
-              Wybierz wpłatomaty do usunięcia
-            </Typography>
-
-            {/* Ładowanie i komunikat błędu */}
-            {loading ? (
-              <CircularProgress />
-            ) : error ? (
-              <Typography color="error">{error}</Typography>
-            ) : (
-              <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                {/* Lista wpłatomatów z checkboxami */}
-                {atmDevices.map((atm) => (
-                  <FormControlLabel
-                    key={atm.id}
-                    control={
-                      <Checkbox
-                        checked={selectedAtms.has(atm.id)}
-                        onChange={() => handleCheckboxChange(atm.id)}
-                        color="primary"
-                      />
-                    }
-                    label={`${atm.localization} (ID: ${atm.id})`}
-                  />
-                ))}
+            }}>
+              <Typography variant="h6" component="h2">
+                Szczegóły Transakcji
+              </Typography>
+              <Typography sx={{ mt: 2 }}>
+                Czy chcesz zaakceptować tę transakcję?
+              </Typography>
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 4 }}>
+                <Button onClick={handleReject} color="error" variant="outlined">Odrzuć</Button>
+                <Button onClick={handleAccept} color="primary" variant="contained">Akceptuj</Button>
               </Box>
-            )}
-
-            <Box sx={{ mt: 2, display: "flex", justifyContent: "space-between" }}>
-              <Button variant="outlined" onClick={() => setIsDeleteATMOpen(false)}>
-                Anuluj
-              </Button>
-              <Button
-                variant="contained"
-                color="error"
-                onClick={deleteSelectedAtms}
-                disabled={selectedAtms.size === 0}
-              >
-                Usuń
-              </Button>
             </Box>
-          </Box>
-        </Modal>
+          </Modal>
+        </Box>
       </Box>
+    <Footer />
+  </>
   );
 }
 

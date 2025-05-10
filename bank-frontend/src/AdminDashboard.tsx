@@ -23,7 +23,7 @@ interface Transaction {
   date: string;
   from_account_id: number;
   to_account_id: number;
-  transaction_type: string;
+  type: string;
   amount: number;
   status: string;
   device: string;
@@ -52,7 +52,7 @@ const [endDate, setEndDate] = useState<Dayjs | null>(null);
     from_account_id: '',
     to_account_id: '',
     amount: '',
-    transaction_type: '',
+    type: '',
     status: '',
     device: ''
   });
@@ -73,7 +73,7 @@ const [endDate, setEndDate] = useState<Dayjs | null>(null);
       (filters.to_account_id ? tx.to_account_id === Number(filters.to_account_id) : true) &&
       (filters.from_account_id ? tx.from_account_id === Number(filters.from_account_id) : true) &&
       (filters.amount ? tx.amount.toString().includes(filters.amount) : true) &&
-      (filters.transaction_type ? tx.transaction_type.includes(filters.transaction_type) : true) &&
+      (filters.type ? tx.type.includes(filters.type) : true) &&
       (filters.status ? tx.status.includes(filters.status) : true) &&
       (filters.device ? tx.device.includes(filters.device) : true)
     );
@@ -440,8 +440,8 @@ const [endDate, setEndDate] = useState<Dayjs | null>(null);
               <InputLabel>Typ</InputLabel>
               <Select
                 label="Typ"
-                name="transaction_type"
-                value={filters.transaction_type}
+                name="type"
+                value={filters.type}
                 onChange={handleFilterChange}
               >
                 <MenuItem value="">all</MenuItem>
@@ -501,7 +501,7 @@ const [endDate, setEndDate] = useState<Dayjs | null>(null);
                           <TableCell>{tx.from_account_id}</TableCell>
                           <TableCell>{tx.to_account_id}</TableCell>
                           <TableCell>{tx.amount.toFixed(2)} PLN</TableCell>
-                          <TableCell>{tx.transaction_type}</TableCell>
+                          <TableCell>{tx.type}</TableCell>
                           <TableCell>{tx.status}</TableCell>
                           <TableCell>{tx.device}</TableCell>
                         </TableRow>

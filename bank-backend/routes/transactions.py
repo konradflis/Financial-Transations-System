@@ -5,6 +5,8 @@ from src.models import Transaction, Account
 from src.auth import get_current_user
 from pydantic import BaseModel
 
+from routes.aml import send_transaction_to_aml
+
 router = APIRouter()
 
 
@@ -13,7 +15,6 @@ class TransferRequest(BaseModel):
     sender_account: str
     receiver_account: str
     amount: float
-
 
 @router.post("/transfer")
 def create_transfer(transfer_data: TransferRequest, db: Session = Depends(get_db),
@@ -51,17 +52,20 @@ def create_transfer(transfer_data: TransferRequest, db: Session = Depends(get_db
 
     # Create a new transaction record
     transaction = Transaction(from_account_id=sender_id, to_account_id=receiver_id, amount=amount,
-                              type="transfer", status="pending")
+                              type="transfer", status="aml_processed")
 
     # Add the record to the database
     db.add(transaction)
     db.commit()
     db.refresh(transaction)
 
-    # Update balances on both accounts
-    sender_account.balance -= amount
+    send_transaction_to_aml(transaction.id, transfer_data.amount)
+
+
+    # Update balances on both accounts - to be moved to aml_system
+    """sender_account.balance -= amount
     if receiver_account:
         receiver_account.balance += amount
-    db.commit()
+    db.commit()"""
 
-    return {"message": "Transaction created", "transaction_id": transaction.id}
+    return {"message": "Transaction created. AML Checking process in progress", "transaction_id": transaction.id}

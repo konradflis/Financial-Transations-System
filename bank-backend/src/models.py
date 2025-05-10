@@ -2,9 +2,9 @@ from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Enu
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
+from pytz import timezone
 
 Base = declarative_base()   # Base class
-
 
 class Account(Base):
     __tablename__ = 'accounts'
@@ -40,7 +40,7 @@ class Transaction(Base):
     to_account_id = Column(Integer, ForeignKey('accounts.id'), nullable=True)  # FK: Destination account ID
     amount = Column(Float, nullable=False)  # Amount
     type = Column(Enum("deposit", "withdrawal", "transfer", name="transaction_types"))  # Transaction type
-    date = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone("Europe/Warsaw")))
+    date = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone("Europe/Warsaw")))  # Transaction date
     status = Column(Enum("pending", "completed", "failed", "cancelled", "aml_processed", "aml_blocked", "aml_approved", name="transaction_statuses"), default="pending")  # Transaction state
     device_id = Column(Integer, ForeignKey('atm_devices.id'), nullable=True)
 
