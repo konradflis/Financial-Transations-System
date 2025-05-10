@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from src.database import get_db
-from src.models import User, Account, Transaction
+from src.models import User, Account, Transaction, Card
 from src.auth import get_current_user
 from pydantic import BaseModel
 
@@ -39,5 +39,25 @@ def get_account_transactions(account_id: int, current_user: User = Depends(get_c
             transactions]
 
 
+@router.get("/user/account/{account_id}/card_id")
+def get_card_id(account_id: int, db: Session = Depends(get_db)):
+
+    # Uzyskiwanie danych karty
+    account = db.query(Account).filter(Account.id == account_id).first()
+
+    if not account:
+        raise HTTPException(status_code=404, detail="Niepoprawne dane konta.")
+
+    #card = Card(account_id=account.id, pin="1234")
+    #db.add(card)
+    #db.commit()
+    #db.refresh(card)
+
+    card = db.query(Card).filter_by(account_id=account.id).first()
+    print(card.id)
+    if not card:
+        raise HTTPException(status_code=404, detail="Brak dostępnych kart.")
+
+    return {"card_id": card.id}
 
 
