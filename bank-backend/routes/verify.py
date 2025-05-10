@@ -9,29 +9,16 @@ from datetime import datetime
 # Weryfikacja transakcji ATM
 router = APIRouter()
 
-# Model do automatycznej weryfikacji
-class TransactionVerificationModel(BaseModel):
+class AutoVerificationModel(BaseModel):
     transaction_id: int
-    from_account_id: int
-    to_account_id: int
-    amount: float
-    transaction_type: str
-    status: str
-    date: datetime
-    device_id: int
-
 
 @router.post("/verify-transaction-auto")
-def auto_verify(transaction_data: TransactionVerificationModel, db: Session = Depends(get_db)):
+def auto_verify(transaction_pending: AutoVerificationModel, db: Session = Depends(get_db)):
 
     # Sprawdzenie, czy transakcja jest w bazie
-    transaction_data_actual = db.query(Transaction).filter(Transacation.id == transaction_data.transaction_id).first()
-    if not transaction_data_actual:
-        raise HTTPException(status_code=404, detail="Nie znaleziono transakcji.")
-
-    # Sprawdzenie, czy rekordy są zgodne
-    expected = TransactionVerificationModel.model_validate(transaction_data_actual)
-    if expected.model_dump() != transaction_data.model_dump():
+    transaction_id = transaction_pending.transaction_id
+    transaction_data = db.query(Transaction).filter(Transaction.id == transaction_id).first()
+    if not transaction_data:
         raise HTTPException(status_code=404, detail="Nie znaleziono transakcji.")
 
     # Sprawdzenie, czy status jest oczekujący
@@ -44,6 +31,5 @@ def auto_verify(transaction_data: TransactionVerificationModel, db: Session = De
         return {"message": "Weryfikacja zakończona pomyślnie.", "status": "completed"}
 
     # Dla kwot wyższych — przekierowanie do pracownika (weryfikacja ręczna)
-    # TODO: Poczekaj na response innego endpointa
     else:
         return {"message": "Wymagana szczegółowa weryfikacja.", "status": "pending"}
