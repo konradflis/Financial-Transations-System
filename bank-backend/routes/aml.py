@@ -1,7 +1,7 @@
 import redis
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException
 from sqlalchemy.orm import Session
-from src.auth import aml_required, hash_password
+from src.auth import aml_required, hash_password, get_current_user
 from src.database import get_db
 from src.models import User, Account, AtmDevice, Transaction, AmlToControl
 import random
@@ -30,9 +30,6 @@ def get_transactions(db: Session = Depends(get_db), current_user=Depends(aml_req
         reason=db.query(AmlToControl).filter_by(transaction_id=transaction.id).all()
         list_reasoning.append(reason)
 
-        ##TODO: dodać do frontu wykorzystanie list_reasoning aby wyświetlać w aml_dashboard jaki powód
-        ## [Konrad] Proponuję endpoint jak niżej:
-
     return transactions
 
 @router.get("/aml/reason")
@@ -47,22 +44,32 @@ def get_reason(id: int, db: Session = Depends(get_db), current_user=Depends(aml_
     return reason
 
 @router.post("/aml/accept")
-def accept_transaction(transaction: TransactionAction, db: Session = Depends(get_db)):
+def accept_transaction(transaction: TransactionAction, db: Session = Depends(get_db), current_user=Depends(aml_required)):
     tx = db.query(Transaction).filter(Transaction.id == transaction.id).first()
     if not tx:
         raise HTTPException(status_code=404, detail="Transaction not found")
 
     ## moved the acceptance to next endpoint, to keep it consistent
-    send_transaction_to_accept(transaction.id)
+    send_transaction_to_accept(tx.id)
+
+    ## updating information about changing status of aml_transaction
+    user = db.query(User).filter(User.id == current_user.get("user_id")).first()
+    update_aml_transaction_status(db,tx.id,user.id)
+
 
     return {"message": "Transaction accepted"}
 
 
 @router.post("/aml/reject")
-def reject_transaction(transaction: TransactionAction, db: Session = Depends(get_db)):
+def reject_transaction(transaction: TransactionAction, db: Session = Depends(get_db), current_user=Depends(aml_required)):
     tx = db.query(Transaction).filter(Transaction.id == transaction.id).first()
     if not tx:
         raise HTTPException(status_code=404, detail="Transaction not found")
+
+    ## updating information about changing status of aml_transaction
+    user = db.query(User).filter(User.id == current_user.get("user_id")).first()
+    update_aml_transaction_status(db, tx.id, user.id)
+
     tx.status = "failed"
     db.commit()
     return {"message": "Transaction rejected"}
@@ -213,3 +220,13 @@ def is_unusual_frequency(db: Session, account_id: int, recent_days: int = 7, fac
     recent_avg = recent_count / recent_days
 
     return past_avg > 0 and (recent_avg > factor_threshold * past_avg)
+
+def update_aml_transaction_status(db: Session, transaction_id: int,user):
+    tx = db.query(AmlToControl).filter(AmlToControl.transaction_id == transaction_id).first()
+    if not tx:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+
+    tx.changed_by_id = user
+    tx.change_date=datetime.now(pytz.timezone('Europe/Warsaw'))
+    db.commit()
+
