@@ -91,9 +91,27 @@ def check_transaction(data: dict, db: Session = Depends(get_db)):
 
     ## checking what kind of transaction is being tested:
     if transaction.type == "deposit":
-        pass
+
+        ## suspiciously many localisations of devices in a short time
+        if is_multiple_transactions_different_locations(db,transaction.from_account_id,"deposit"):
+            problems_found.append("is_multiple_deposits_different_locations")
+
+        ## smurfing - regular withdrawal for a limit value (probably splitting bigger payments)
+        if is_smurfing_activity(db,transaction.from_account_id,transaction.type):
+            problems_found.append("is_smurfing_activity")
+
+
     elif transaction.type == "withdrawal":
-        pass
+
+        ## suspiciously many localisations of devices in a short time
+        if is_multiple_transactions_different_locations(db,transaction.from_account_id,"withdrawal"):
+            problems_found.append("is_multiple_withdrawal_different_locations")
+
+        ## smurfing - regular withdrawal for a limit value (probably splitting bigger payments)
+        if is_smurfing_activity(db,transaction.from_account_id,transaction.type):
+            problems_found.append("is_smurfing_activity")
+
+
 
     elif transaction.type == "transfer":
 
@@ -221,6 +239,38 @@ def is_unusual_frequency(db: Session, account_id: int, recent_days: int = 7, fac
 
     return past_avg > 0 and (recent_avg > factor_threshold * past_avg)
 
+def is_multiple_transactions_different_locations(db: Session, account_id: int, type_of_transaction: str, minutes: int = 30, max_locations: int = 2) -> bool:
+    """
+    Sprawdza, czy w ostatnich X minutach wystąpiły wpłaty z różnych lokalizacji ATM.
+    """
+    warsaw_tz = pytz.timezone("Europe/Warsaw")
+    now = datetime.now(warsaw_tz)
+    window_start = now - timedelta(minutes=minutes)
+
+    deposits = db.query(Transaction).join(AtmDevice, Transaction.device_id == AtmDevice.id).filter(
+        Transaction.from_account_id == account_id,
+        Transaction.type == type_of_transaction,
+        Transaction.date >= window_start,
+    ).all()
+
+def is_smurfing_activity(db: Session, account_id: int, type_of_transaction: str, window_minutes: int = 60, threshold: float = 10000.0, max_single_amount: float = 2000.0) -> bool:
+    """
+    Wykrywa smurfing: wiele małych transakcji, które łącznie przekraczają określony próg w krótkim czasie.
+    """
+    time_window_start = datetime.now(tz=pytz.timezone("Europe/Warsaw")) - timedelta(minutes=window_minutes)
+
+    # Pobierz transakcje (deposit lub transfer), z konta użytkownika, poniżej max_single_amount
+    transactions = db.query(Transaction).filter(
+        Transaction.from_account_id == account_id,
+        Transaction.date >= time_window_start,
+        Transaction.amount <= max_single_amount,
+        Transaction.type == type_of_transaction
+    ).all()
+
+    total_amount = sum(tx.amount for tx in transactions)
+
+    return total_amount >= threshold
+
 def update_aml_transaction_status(db: Session, transaction_id: int,user):
     tx = db.query(AmlToControl).filter(AmlToControl.transaction_id == transaction_id).first()
     if not tx:
@@ -229,4 +279,6 @@ def update_aml_transaction_status(db: Session, transaction_id: int,user):
     tx.changed_by_id = user
     tx.change_date=datetime.now(pytz.timezone('Europe/Warsaw'))
     db.commit()
+
+
 
