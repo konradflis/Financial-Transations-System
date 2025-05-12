@@ -113,6 +113,7 @@ def check_transaction(data: dict, db: Session = Depends(get_db)):
 
 
 
+
     elif transaction.type == "transfer":
 
         ## suspicious ammount of transferred money:
@@ -133,18 +134,21 @@ def check_transaction(data: dict, db: Session = Depends(get_db)):
         if is_unusual_frequency(db, transaction.from_account_id):
             problems_found.append("is_unusual_frequency")
 
+        ## behaviour due to the problems found - none --> accept, any --> aml_block
+        if problems_found:
+            transaction.status = "aml_blocked"
+            aml_transaction = AmlToControl(transaction_id=transaction.id, reasoning=",".join(problems_found))
+            db.add(aml_transaction)
+        else:
+            transaction.status = "aml_approved"
+            send_transaction_to_accept(transaction.id)
+
 
     else:
         raise HTTPException(status_code=405, detail="Transaction error: wrong transaction type")
 
 
-    if problems_found:
-        transaction.status = "aml_blocked"
-        aml_transaction=AmlToControl(transaction_id=transaction.id,reasoning=",".join(problems_found))
-        db.add(aml_transaction)
-    else:
-        transaction.status = "aml_approved"
-        send_transaction_to_accept(transaction.id)
+
 
     db.commit()
 
