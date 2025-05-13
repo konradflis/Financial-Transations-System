@@ -51,6 +51,8 @@ const UserDashboard = () => {
   const [lastestTransaction, setLastestTransaction] = useState<number | null>(null);
   const [confirmationData, setConfirmationData] = useState("");
 
+  const [isDepositOpen, setIsDepositOpen] = useState(false);
+
   const [filters, setFilters] = useState({
     date: '',
     receiver: '',
@@ -238,7 +240,7 @@ const UserDashboard = () => {
   const verifyPIN = async () => {
     const token = localStorage.getItem("token");
     try {
-      const response = await fetch(`http://localhost:8000/pin-verification`, {
+      const response = await fetch(`http://localhost:8000/atm-operation/pin-verification`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -257,7 +259,7 @@ const UserDashboard = () => {
     }
   };
 
-  const cancelWithdrawalStage1 = async () => {
+  const cancelATMOperationStage1 = async () => {
 
     if (!Number.isFinite(atm_id)) {
       console.error("Brak ID bankomatu.");
@@ -280,6 +282,7 @@ const UserDashboard = () => {
         setIsATMVerified(false);
         setATM_id(null);
         setIsWithdrawalOpen(false);
+        setIsDepositOpen(false);
       }
     } catch (err) {
       console.error("Nie rozpoznano bankomatu.")
@@ -287,7 +290,7 @@ const UserDashboard = () => {
   };
 
 
-  const cancelWithdrawalStage2 = async () => {
+  const cancelATMOperationStage2 = async () => {
     const token = localStorage.getItem("token");
     try {
       if (selectedAccount) {
@@ -306,7 +309,7 @@ const UserDashboard = () => {
           setIsAmountOpen(false);
         }
     }
-      cancelWithdrawalStage1();   // wywołanie też warunków dla zwolnienia urządzenia
+      cancelATMOperationStage1();   // wywołanie też warunków dla zwolnienia urządzenia
 
     } catch (err) {
       console.error("Nie rozpoznano bankomatu.")
@@ -340,10 +343,10 @@ const UserDashboard = () => {
   }, [selectedAccount]);
 
   useEffect(() => {
-    if (isWithdrawalOpen) {
+    if (isWithdrawalOpen || isDepositOpen) {
       fetchATM();
     }
-  }, [isWithdrawalOpen]);
+  }, [isWithdrawalOpen, isDepositOpen]);
 
   useEffect(() => {
     if (Number.isFinite(atm_id)) {
@@ -437,6 +440,55 @@ const UserDashboard = () => {
     }
   };
 
+
+  const handleDeposit = async () => {
+    const token = localStorage.getItem("token");
+    if (!token || !selectedAccount) {
+      alert("Brak danych do wykonania operacji.");
+      return;
+    }
+
+    if (!atm_id || !card_id || !isDepositOpen) {
+      alert("Spróbuj ponownie później.")
+      return;
+    }
+
+    try {
+      const response = await fetch(`http://localhost:8000/atm-operation/deposit`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          card_id: card_id,
+          atm_id: atm_id,
+          amount: parseFloat(amount),
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data["status"]=="success") {alert("Wpłata wykonana!");}
+        else if (data["status"]=="failure") {alert("Operacja zakończona niepowodzeniem!");}
+        else {alert("Operacja oczekuje na weryfikację. Zgłoś się do banku.");}
+
+        setLastestTransaction(data["transaction_id"]);
+        setIsConfirmationOpen(true);  // oczekiwanie na potwierdzenie
+
+        //fetchTransactions(selectedAccount.id);
+        //fetchBalance(selectedAccount.id);
+      } else {
+        const errorData = await response.json();
+        alert(`Błąd: ${errorData.detail || "Nieznany błąd"}`);
+      }
+    } catch (err) {
+      console.error("Błąd operacji:", err);
+      alert("Wystąpił błąd podczas wykonywania operacji.");
+    }
+  };
+
+
   const handleConfirmation = async () => {
     const token = localStorage.getItem("token");
     if (!token || !selectedAccount) {
@@ -466,7 +518,7 @@ const UserDashboard = () => {
         setIsConfirmationOpen(false);
         setLastestTransaction(null);
 
-        cancelWithdrawalStage2();
+        cancelATMOperationStage2();
 
         fetchTransactions(selectedAccount.id);
         fetchBalance(selectedAccount.id);
@@ -608,10 +660,20 @@ const UserDashboard = () => {
                     variant="contained"
                     color="primary"
                     fullWidth
-                    onClick={() => setIsWithdrawalOpen(true)}
+                    onClick={() => {setIsWithdrawalOpen(true); setIsDepositOpen(false)}}
                     disabled={!selectedAccount}
                   >
                     Wypłata środków
+                  </Button>
+                  <Button
+                    sx={{ mt: 2 }}
+                    variant="contained"
+                    color="primary"
+                    fullWidth
+                    onClick={() => {setIsDepositOpen(true); setIsWithdrawalOpen(false)}}
+                    disabled={!selectedAccount}
+                  >
+                    Wpłata środków
                   </Button>
                 </Box>
               </Box>
@@ -772,7 +834,7 @@ const UserDashboard = () => {
           </Modal>
 
           <Modal
-            open={isWithdrawalOpen && Number.isFinite(atm_id) && isATMVerified}
+            open={(isWithdrawalOpen || isDepositOpen) && Number.isFinite(atm_id) && isATMVerified}
             aria-labelledby="withdrawal-verification-modal"
           >
             <Box
@@ -807,14 +869,14 @@ const UserDashboard = () => {
                 sx={{ mb: 2 }}
               />
               <Box display="flex" justifyContent="space-between">
-                <Button variant="outlined" onClick={() => cancelWithdrawalStage1()}>
+                <Button variant="outlined" onClick={() => cancelATMOperationStage1()}>
                   Anuluj
                 </Button>
                 <Button
                   variant="contained"
                   color="primary"
                   onClick={() => verifyPIN()}
-                  disabled={!isWithdrawalOpen || !atm_id || !isATMVerified}
+                  disabled={!atm_id || !isATMVerified || (!isWithdrawalOpen && !isDepositOpen) || (isWithdrawalOpen && isDepositOpen)}
                 >
                   Zatwierdź
                 </Button>
@@ -852,7 +914,7 @@ const UserDashboard = () => {
                 sx={{ mb: 2 }}
               />
               <Box display="flex" justifyContent="space-between">
-                <Button variant="outlined" onClick={() => cancelWithdrawalStage2()}>
+                <Button variant="outlined" onClick={() => cancelATMOperationStage2()}>
                   Anuluj
                 </Button>
                 <Button
@@ -860,6 +922,50 @@ const UserDashboard = () => {
                   color="primary"
                   onClick={() => handleWithdrawal()}
                   disabled={!isWithdrawalOpen || !atm_id || !isATMVerified || !isAmountOpen}
+                >
+                  Zatwierdź
+                </Button>
+              </Box>
+            </Box>
+          </Modal>
+
+          <Modal
+            open={isDepositOpen && Number.isFinite(atm_id) && isATMVerified && isAmountOpen}
+            aria-labelledby="deposit-modal"
+          >
+            <Box
+              sx={{
+                position: "absolute",
+                top: "50%",
+                left: "50%",
+                transform: "translate(-50%, -50%)",
+                bgcolor: "background.paper",
+                p: 4,
+                borderRadius: 2,
+                boxShadow: 24,
+                minWidth: 300,
+              }}
+            >
+              <Typography id="deposit-modal" variant="h6" mb={2}>
+                Wpłata środków
+              </Typography>
+              <TextField
+                fullWidth
+                label="Kwota"
+                type="number"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                sx={{ mb: 2 }}
+              />
+              <Box display="flex" justifyContent="space-between">
+                <Button variant="outlined" onClick={() => cancelATMOperationStage2()}>
+                  Anuluj
+                </Button>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  onClick={() => handleDeposit()}
+                  disabled={!isDepositOpen || !atm_id || !isATMVerified || !isAmountOpen}
                 >
                   Zatwierdź
                 </Button>
@@ -892,7 +998,7 @@ const UserDashboard = () => {
                 <Button variant="outlined" onClick={() => {handleConfirmation(); setIsConfirmationOpen(false)}}>
                   TAK
                 </Button>
-                 <Button variant="outlined" onClick={() => {setIsConfirmationOpen(false); setAmount(""); cancelWithdrawalStage2()}}>
+                 <Button variant="outlined" onClick={() => {setIsConfirmationOpen(false); setAmount(""); cancelATMOperationStage2()}}>
                   NIE
                 </Button>
               </Box>
@@ -921,7 +1027,12 @@ const UserDashboard = () => {
                 Potwierdzenie
               </Typography>
               <Typography variant="body1">
-                {confirmationData}
+                {confirmationData.split("\n").map((line, index) => (
+                  <span key={index}>
+                    {line}
+                    <br />
+                  </span>
+                ))}
               </Typography>
               <Box display="flex" justifyContent="space-between">
                 <Button variant="outlined" onClick={() => setConfirmationData("")}>

@@ -129,7 +129,7 @@ def verify_atm_operation(operation_data: ATMVerificationModel, db: Session = Dep
     return {"status": "ok"}
 
 
-@router.post("/pin-verification")
+@router.post("/atm-operation/pin-verification")
 def verify_pin(verification_data: PINVerificationModel, db: Session = Depends(get_db)):
 
     # Weryfikacja pinu i klienta
@@ -147,16 +147,17 @@ def verify_pin(verification_data: PINVerificationModel, db: Session = Depends(ge
     # Sprawdzenie, czy konto może być obsłużone (czy istnieje oraz, czy nie jest zablokowane)
     # Sprawdzenie, czy użytkownik nie jest tymczasowo zablokowany
     account_data = db.query(Account).filter(Account.id == card_data.account_id).first()
-    # user_data = db.query(User).filter(User.id == account_data.user_id).first()
+    user_data = db.query(User).filter(User.id == account_data.user_id).first()
     if not account_data:
         raise HTTPException(status_code=404, detail="Nie rozpoznano konta.")
 
     if account_data.status == 'busy':
         raise HTTPException(status_code=403, detail="Usługa tymczasowo niedostępna.")
 
-    # if user_data.status == 'disabled':
-    #    raise HTTPException(status_code=403, detail="Usługa tymczasowo niedostępna.")
+    if user_data.status == 'disabled':
+        raise HTTPException(status_code=403, detail="Usługa tymczasowo niedostępna.")
 
+    # Dostęp do konta uzyskany — blokada innych operacji
     account_data.status = 'busy'
     db.commit()
     db.refresh(account_data)
@@ -178,7 +179,6 @@ def withdraw_funds(withdrawal_data: ATMOperationModelPIN, db: Session = Depends(
     atm_id = withdrawal_data.atm_id
     amount = withdrawal_data.amount
 
-    atm_data = db.query(AtmDevice).filter(AtmDevice.id == atm_id).first()
     card_data = db.query(Card).filter(Card.id == card_id).first()
     account_data = db.query(Account).filter(Account.id == card_data.account_id).first()
 
@@ -189,11 +189,6 @@ def withdraw_funds(withdrawal_data: ATMOperationModelPIN, db: Session = Depends(
     # Sprawdzenie, czy podaną kwotę można wypłacić
     if amount % 10 != 0:
         raise HTTPException(status_code=409, detail="Bankomat nie może wydać żądanej kwoty.")
-
-    # Zablokowanie możliwości wykonywania innych operacji na koncie
-    account_data.status = 'busy'
-    db.commit()
-    db.refresh(account_data)
 
     # Nowy rekord transakcji
     new_transaction = Transaction(from_account_id=account_data.id, to_account_id=0, amount=amount,
@@ -243,6 +238,75 @@ def withdraw_funds(withdrawal_data: ATMOperationModelPIN, db: Session = Depends(
                 "transaction_id": new_transaction.id}
 
 
+@router.post("/atm-operation/deposit")
+def deposit_funds(deposit_data: ATMOperationModelPIN, db: Session = Depends(get_db)):
+
+    """
+    Dalsza weryfikacja -- po wprowadzeniu PIN oraz wykonanie wypłaty.
+    :param deposit_data:
+    :param db:
+    :return:
+    """
+
+    card_id = deposit_data.card_id
+    atm_id = deposit_data.atm_id
+    amount = deposit_data.amount
+
+    card_data = db.query(Card).filter(Card.id == card_id).first()
+    account_data = db.query(Account).filter(Account.id == card_data.account_id).first()
+
+    # Sprawdzenie, czy podaną kwotę można wpłacić
+    if amount % 10 != 0:
+        raise HTTPException(status_code=409, detail="Bankomat nie może przyjąć żądanej kwoty.")
+
+    # Nowy rekord transakcji
+    new_transaction = Transaction(from_account_id=0, to_account_id=account_data.id, amount=amount,
+                                  type='deposit', status='pending', device_id=atm_id)
+    db.add(new_transaction)
+    db.commit()
+    db.refresh(new_transaction)
+
+    # Weryfikacja
+    verification_payload = {
+        "transaction_id": new_transaction.id,
+    }
+    verification_response = requests.post("http://localhost:8000/verify-transaction-auto", json=verification_payload)
+
+    # Jeżeli zwrócono kod błędu — transakcja odrzucona
+    if verification_response.status_code != 200:
+        new_transaction.status = 'failed'
+        new_transaction.date = datetime.now(pytz.timezone('Europe/Warsaw'))
+        db.commit()  # Aktualizacja informacji w bazie
+        db.refresh(new_transaction)
+
+        return {"message": "Operacja odrzucona! Spróbuj ponownie później.", "status": "failure",
+                "transaction_id": new_transaction.id}
+
+    # Jeżeli zwrócono completed — można finalizować transakcję
+    elif verification_response.json()['status'] == 'completed':
+
+        new_transaction.status = 'completed'
+        new_transaction.date = datetime.now(pytz.timezone('Europe/Warsaw'))
+        account_data.balance += amount
+        db.commit()  # Aktualizacja informacji w bazie
+        db.refresh(new_transaction)
+
+        return {"message": "Operacja zakończona powodzeniem!", "status": "success",
+                "transaction_id": new_transaction.id}
+
+
+    # Jeśli weryfikacja się nie powiodła — transakcja wciąż oczekuje na ręczne zatwierdzenie
+    else:
+        new_transaction.status = 'pending'
+        new_transaction.date = datetime.now(pytz.timezone('Europe/Warsaw'))
+        db.commit()  # Aktualizacja informacji w bazie
+        db.refresh(new_transaction)
+
+        return {"message": "Operacja odrzucona! Na twoim koncie wykryto podejrzaną aktywność."
+                           "Skontaktuj się z oddziałem banku.", "status": "pending",
+                "transaction_id": new_transaction.id}
+
+
 @router.get("/atm-operation/confirmation")
 def get_confirmation(transaction_id: int, db: Session = Depends(get_db)):
 
@@ -251,7 +315,22 @@ def get_confirmation(transaction_id: int, db: Session = Depends(get_db)):
     transaction = db.query(Transaction).filter(Transaction.id == transaction_id).first()
 
     if transaction:
-        confirmation_txt = f"Data: {transaction.date}\nKwota: {transaction.amount}\nStatus: {transaction.status}"
+
+        if transaction.type == 'withdrawal':
+            type = 'wypłata'
+        elif transaction.type == 'deposit':
+            type = 'wpłata'
+        else:
+            type = 'przelew'
+
+        if transaction.status == 'pending':
+            status = 'oczekująca\n-- SKONTAKTUJ SIĘ Z ODDZIAŁEM BANKU --'
+        elif transaction.status == 'completed':
+            status = 'sukces'
+        else:
+            status = 'niepowodzenie'
+
+        confirmation_txt = f"Data: {transaction.date.strftime('%Y-%m-%d %H:%M:%S')}\nTyp: {type}\nKwota: {transaction.amount} PLN\nStatus operacji: {status}"
 
         return {"confirmation": confirmation_txt}
 
