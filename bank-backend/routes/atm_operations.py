@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from datetime import datetime, timezone
 import requests
 from routes.verify import router as verify_router
+import pytz
 
 router = APIRouter()
 router.include_router(verify_router)
@@ -196,7 +197,7 @@ def withdraw_funds(withdrawal_data: ATMOperationModelPIN, db: Session = Depends(
 
     # Nowy rekord transakcji
     new_transaction = Transaction(from_account_id=account_data.id, to_account_id=0, amount=amount,
-                                  type='withdrawal', date=datetime.now(), status='pending', device_id=atm_id)
+                                  type='withdrawal', status='pending', device_id=atm_id)
     db.add(new_transaction)
     db.commit()
     db.refresh(new_transaction)
@@ -210,7 +211,7 @@ def withdraw_funds(withdrawal_data: ATMOperationModelPIN, db: Session = Depends(
     # Jeżeli zwrócono kod błędu — transakcja odrzucona
     if verification_response.status_code != 200:
         new_transaction.status = 'failed'
-        new_transaction.date = datetime.now()
+        new_transaction.date = datetime.now(pytz.timezone('Europe/Warsaw'))
         db.commit()  # Aktualizacja informacji w bazie
         db.refresh(new_transaction)
 
@@ -221,7 +222,7 @@ def withdraw_funds(withdrawal_data: ATMOperationModelPIN, db: Session = Depends(
     elif verification_response.json()['status'] == 'completed':
 
         new_transaction.status = 'completed'
-        new_transaction.date = datetime.now()
+        new_transaction.date = datetime.now(pytz.timezone('Europe/Warsaw'))
         account_data.balance -= amount
         db.commit()  # Aktualizacja informacji w bazie
         db.refresh(new_transaction)
@@ -233,7 +234,7 @@ def withdraw_funds(withdrawal_data: ATMOperationModelPIN, db: Session = Depends(
     # Jeśli weryfikacja się nie powiodła — transakcja wciąż oczekuje na ręczne zatwierdzenie
     else:
         new_transaction.status = 'pending'
-        new_transaction.date = datetime.now()
+        new_transaction.date = datetime.now(pytz.timezone('Europe/Warsaw'))
         db.commit()  # Aktualizacja informacji w bazie
         db.refresh(new_transaction)
 
