@@ -90,27 +90,9 @@ def check_transaction(data: dict, db: Session = Depends(get_db)):
     problems_found=[]
 
     ## checking what kind of transaction is being tested:
-    if transaction.type == "deposit":
-
-        ## suspiciously many localisations of devices in a short time
-        if is_multiple_transactions_different_locations(db,transaction.from_account_id,"deposit"):
-            problems_found.append("is_multiple_deposits_different_locations")
-
-        ## smurfing - regular withdrawal for a limit value (probably splitting bigger payments)
-        if is_smurfing_activity(db,transaction.from_account_id,transaction.type):
-            problems_found.append("is_smurfing_activity")
-
-
-    elif transaction.type == "withdrawal":
-
-        ## suspiciously many localisations of devices in a short time
-        if is_multiple_transactions_different_locations(db,transaction.from_account_id,"withdrawal"):
-            problems_found.append("is_multiple_withdrawal_different_locations")
-
-        ## smurfing - regular withdrawal for a limit value (probably splitting bigger payments)
-        if is_smurfing_activity(db,transaction.from_account_id,transaction.type):
-            problems_found.append("is_smurfing_activity")
-
+    if transaction.type in ["deposit","withdrawal"]:
+        ## aml check moved to the endpoint /verify-transaction-auto for deposit and withdrawal
+        pass
 
 
 
@@ -243,7 +225,7 @@ def is_unusual_frequency(db: Session, account_id: int, recent_days: int = 7, fac
 
     return past_avg > 0 and (recent_avg > factor_threshold * past_avg)
 
-def is_multiple_transactions_different_locations(db: Session, account_id: int, type_of_transaction: str, minutes: int = 30, max_locations: int = 2) -> bool:
+def is_multiple_transactions_different_locations(db: Session, account_id: int, type_of_transaction: str, minutes: int = 30, max_locations: int = 3) -> bool:
     """
     Sprawdza, czy w ostatnich X minutach wystąpiły wpłaty z różnych lokalizacji ATM.
     """
@@ -251,11 +233,15 @@ def is_multiple_transactions_different_locations(db: Session, account_id: int, t
     now = datetime.now(warsaw_tz)
     window_start = now - timedelta(minutes=minutes)
 
-    deposits = db.query(Transaction).join(AtmDevice, Transaction.device_id == AtmDevice.id).filter(
+    locations = db.query(AtmDevice.localization).join(Transaction, Transaction.device_id == AtmDevice.id).filter(
         Transaction.from_account_id == account_id,
         Transaction.type == type_of_transaction,
         Transaction.date >= window_start,
-    ).all()
+    ).distinct().all()
+
+    unique_location_count = len(locations)
+
+    return unique_location_count >= max_locations
 
 def is_smurfing_activity(db: Session, account_id: int, type_of_transaction: str, window_minutes: int = 60, threshold: float = 10000.0, max_single_amount: float = 2000.0) -> bool:
     """
