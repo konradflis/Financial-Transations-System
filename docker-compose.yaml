@@ -34,3 +34,19 @@ services:
     volumes:
       - ./bank-frontend:/usr/src/app
       - /usr/src/app/node_modules
+      
+  celery-worker:
+    build:
+      context: .
+      dockerfile: bank-backend/Dockerfile
+    container_name: celery-worker
+    depends_on:
+      - redis
+    volumes:
+      - ./bank-backend:/app
+    env_file:
+      - bank-backend/src/login.env
+    environment:
+      - REDIS_HOST=redis
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    command: celery -A src.celery_app worker --loglevel=info
