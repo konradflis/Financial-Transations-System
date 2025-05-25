@@ -423,7 +423,7 @@ const UserDashboard = () => {
         const data = await response.json();
         if (data["status"]=="success") {alert("Wypłata wykonana!");}
         else if (data["status"]=="failure") {alert("Operacja zakończona niepowodzeniem!");}
-        else {alert("Operacja oczekuje na weryfikację. Zgłoś się do banku.");}
+        else {alert("Operacja oczekuje na weryfikację...");}
 
         setLastestTransaction(data["transaction_id"]);
         setIsConfirmationOpen(true);  // oczekiwanie na potwierdzenie
@@ -869,7 +869,7 @@ const UserDashboard = () => {
                 sx={{ mb: 2 }}
               />
               <Box display="flex" justifyContent="space-between">
-                <Button variant="outlined" onClick={() => cancelATMOperationStage1()}>
+                <Button variant="outlined" onClick={() => cancelATMOperationStage2()}>
                   Anuluj
                 </Button>
                 <Button

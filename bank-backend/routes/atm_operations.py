@@ -8,9 +8,15 @@ from datetime import datetime, timezone
 import requests
 from routes.verify import router as verify_router
 import pytz
+import time
+from redlock import Redlock
 
+from src.celery_app import process_atm_operation_task
+from src.celery_app import celery_app
 router = APIRouter()
 router.include_router(verify_router)
+
+redlock = Redlock([{"host": "redis", "port": 6379}])
 
 
 class AtmFreeRequest(BaseModel):
@@ -48,12 +54,12 @@ class ConfirmationRequest(BaseModel):
 @router.get("/atm-assignment")
 def assign_atm(db: Session = Depends(get_db)):
 
-    # Wybranie dostępnych bankomatów z tabeli
-    atm_active = db.query(AtmDevice).filter(AtmDevice.status == 'active').first()
-    if not atm_active:
+    # Oczekiwanie na odpowiedź workera
+    response = assign_atm_intervals()
+    if response['status'] != 'success':
         raise HTTPException(status_code=404, detail="Brak dostępnych bankomatów.")
 
-    return {"atm_id": atm_active.id}
+    return {"atm_id": response['atm_id']}
 
 
 @router.post("/atm-free")
@@ -109,13 +115,7 @@ def verify_atm_operation(operation_data: ATMVerificationModel, db: Session = Dep
         raise HTTPException(status_code=404, detail="Bankomat nie istnieje.")
 
     # Sprawdzenie, czy bankomat jest wolny — czy może wykonać teraz operację
-    if atm_data.status == 'busy':
-        raise HTTPException(status_code=409, detail="Bankomat jest zajęty.")
-
-    # Bankomat zostaje oznaczony jak zajęty
-    atm_data.status = 'busy'
-    db.commit()
-    db.refresh(atm_data)
+    # BANKOMANT JEST JUŻ ZAREZERWOWANY DLA KLIENTA NA POCZĄTKU ENDPOINTA
 
     # Sprawdzenie, czy karta może być obsłużona przez bankomat
     card_data = db.query(Card).filter(Card.id == card_id).first()
@@ -137,7 +137,7 @@ def verify_pin(verification_data: PINVerificationModel, db: Session = Depends(ge
     card_id = verification_data.card_id
     pin = verification_data.pin
 
-    card_data = db.query(Card).filter(Card.id == card_id).first()
+    #card_data = db.query(Card).filter(Card.id == card_id).first()
 
     # Sprawdzenie PIN-u podanego przez klienta (czy PIN pasuje do karty)
     pin_data = db.query(Card).filter(Card.id == card_id, Card.pin == pin).first()
@@ -146,23 +146,15 @@ def verify_pin(verification_data: PINVerificationModel, db: Session = Depends(ge
 
     # Sprawdzenie, czy konto może być obsłużone (czy istnieje oraz, czy nie jest zablokowane)
     # Sprawdzenie, czy użytkownik nie jest tymczasowo zablokowany
-    account_data = db.query(Account).filter(Account.id == card_data.account_id).first()
-    user_data = db.query(User).filter(User.id == account_data.user_id).first()
-    if not account_data:
-        raise HTTPException(status_code=404, detail="Nie rozpoznano konta.")
+    # Oczekiwanie na uzyskanie dostępu do konta
+    response = check_account_lock(card_id)
 
-    if account_data.status == 'busy':
+    if response['label'] == 'timeout':
+        raise HTTPException(status_code=404, detail="Nie znaleziono konta.")
+    elif response['label'] == 'account_busy' or response['label'] == 'user_disabled':
         raise HTTPException(status_code=403, detail="Usługa tymczasowo niedostępna.")
-
-    if user_data.status == 'disabled':
-        raise HTTPException(status_code=403, detail="Usługa tymczasowo niedostępna.")
-
-    # Dostęp do konta uzyskany — blokada innych operacji
-    account_data.status = 'busy'
-    db.commit()
-    db.refresh(account_data)
-
-    return {"message": "ok"}
+    else:
+        return {"message": "ok"}
 
 
 @router.post("/atm-operation/withdrawal")
@@ -174,7 +166,6 @@ def withdraw_funds(withdrawal_data: ATMOperationModelPIN, db: Session = Depends(
     :param db:
     :return:
     """
-
     card_id = withdrawal_data.card_id
     atm_id = withdrawal_data.atm_id
     amount = withdrawal_data.amount
@@ -197,45 +188,13 @@ def withdraw_funds(withdrawal_data: ATMOperationModelPIN, db: Session = Depends(
     db.commit()
     db.refresh(new_transaction)
 
-    # Weryfikacja
-    verification_payload = {
+    celery_app.send_task("process_atm_operation_task", args=[new_transaction.id])
+
+    return {
+        "message": "Transakcja w toku...",
         "transaction_id": new_transaction.id,
+        "status": "processing"
     }
-    verification_response = requests.post("http://localhost:8000/verify-transaction-auto", json=verification_payload)
-
-    # Jeżeli zwrócono kod błędu — transakcja odrzucona
-    if verification_response.status_code != 200:
-        new_transaction.status = 'failed'
-        new_transaction.date = datetime.now(pytz.timezone('Europe/Warsaw'))
-        db.commit()  # Aktualizacja informacji w bazie
-        db.refresh(new_transaction)
-
-        return {"message": "Operacja odrzucona! Spróbuj ponownie później.", "status": "failure",
-                "transaction_id": new_transaction.id}
-
-    # Jeżeli zwrócono completed — można finalizować transakcję
-    elif verification_response.json()['status'] == 'completed':
-
-        new_transaction.status = 'completed'
-        new_transaction.date = datetime.now(pytz.timezone('Europe/Warsaw'))
-        account_data.balance -= amount
-        db.commit()  # Aktualizacja informacji w bazie
-        db.refresh(new_transaction)
-
-        return {"message": "Operacja zakończona powodzeniem!", "status": "success",
-                "transaction_id": new_transaction.id}
-
-
-    # Jeśli weryfikacja się nie powiodła — transakcja wciąż oczekuje na ręczne zatwierdzenie
-    else:
-        new_transaction.status = 'pending'
-        new_transaction.date = datetime.now(pytz.timezone('Europe/Warsaw'))
-        db.commit()  # Aktualizacja informacji w bazie
-        db.refresh(new_transaction)
-
-        return {"message": "Operacja odrzucona! Na twoim koncie wykryto podejrzaną aktywność."
-                           "Skontaktuj się z oddziałem banku.", "status": "pending",
-                "transaction_id": new_transaction.id}
 
 
 @router.post("/atm-operation/deposit")
@@ -311,7 +270,7 @@ def deposit_funds(deposit_data: ATMOperationModelPIN, db: Session = Depends(get_
 def get_confirmation(transaction_id: int, db: Session = Depends(get_db)):
 
     # Przygotowanie potwierdzenia
-
+    time.sleep(1)
     transaction = db.query(Transaction).filter(Transaction.id == transaction_id).first()
 
     if transaction:
@@ -337,3 +296,89 @@ def get_confirmation(transaction_id: int, db: Session = Depends(get_db)):
     else:
         # ewentualnie raise error tutaj
         return {"confirmation": "Błąd pobierania danych."}
+
+
+def assign_atm_intervals(timeout=10, interval=2):
+
+    """
+    Próba przypisania bankomatu przez [timeout] sekund.
+    :param timeout: jak długo próbować
+    :param interval: co ile wysyłać ponowną próbę
+    :return:
+    """
+
+    db = next(get_db())
+    waited = 0
+
+    # Zapytanie
+    try:
+        while waited < timeout:
+
+            # Przypisanie bankomatu do użytkownika — oznaczenie go jako zajęty
+            atm_chosen = db.query(AtmDevice).filter(AtmDevice.status == 'active').with_for_update().first()
+            if atm_chosen:
+                atm_chosen.status = 'busy'
+                db.commit()
+                return {"status": "success", "atm_id": atm_chosen.id}
+
+            time.sleep(interval)    # Odczekaj odpowiednią ilość sekund
+            waited += interval
+            db.rollback()           # odświeżenie
+        return {"status": "failure", "error_message": "Brak dostępnych bankomatów. Spróbuj ponownie później."}
+
+    except Exception as e:
+        db.rollback()
+        return {"status": "error", "message": f"Nieoczekiwany błąd: {e}"}
+    finally:
+        db.close()
+
+
+def check_account_lock(card_id: int):
+
+    """
+    Próba uzyskania dostępu do konta.
+    :param card_id: karta połączona z kontem
+    :return:
+    """
+
+    db = next(get_db())
+    lock = None
+
+    try:
+        card = db.query(Card).filter(Card.id == card_id).first()
+        if not card:
+            return {"status": "error", "message": "Nie znaleziono karty"}
+
+        account = db.query(Account).filter(Account.id == card.account_id).first()
+        user = db.query(User).filter(User.id == account.user_id).first()
+
+        lock_key = f"lock-account-{account.id}"
+        for _ in range(10):  # Próba uzyskania dostępu do konta (lock_key) przez 10 sekund
+            lock = redlock.lock(lock_key, 10000)  # zablokowanie dostępu innym procesom na 10 sekund
+            if lock:
+                break
+            time.sleep(1)
+
+        if not lock:        # nie udało się uzyskać dostępu
+            return {"status": "error", "label": "timeout"}
+
+        if account.status == 'busy':       # udało się uzyskać dostęp, ale konto jest wciąż zajęte
+            return {"status": "error", "label": "account_busy"}
+
+        if user.status == 'disabled':       # klient jest zablokowany
+            return {"status": "error", "label": "user_disabled"}
+
+        account.status = 'busy'
+        db.commit()
+        db.refresh(account)
+
+        return {"status": "success", "account_id": account.id, 'label': 'success'}
+
+    except Exception as e:
+        db.rollback()
+        return {"status": "error", "message": f"Nieoczekiwany błąd: {e}"}
+
+    finally:
+        if lock:
+            redlock.unlock(lock)
+        db.close()
