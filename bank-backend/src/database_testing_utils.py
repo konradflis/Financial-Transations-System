@@ -163,7 +163,7 @@ def generate_transaction_logs_auto_filename(db, count: int = 50, folder: str = "
                 "from_account_number": account.account_number,
                 "to_account_number": None,
                 "amount": amount,
-                "pin": account.card.pin,
+                "pin": random.choice(account.card).pin if account.card else None ##random w związku z tym, że może być więcej niż jedna karta do konta
             }
 
         elif tx_type == "deposit":
@@ -180,7 +180,7 @@ def generate_transaction_logs_auto_filename(db, count: int = 50, folder: str = "
                 "from_account_number": None,
                 "to_account_number": account.account_number,
                 "amount": amount,
-                "pin": account.card.pin,
+                "pin": random.choice(account.card).pin if account.card else None ##random w związku z tym, że może być więcej niż jedna karta do konta
             }
 
         transactions.append(transaction)
