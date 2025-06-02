@@ -78,8 +78,3 @@ class AmlToControl(Base):
     transaction=relationship("Transaction", foreign_keys=[transaction_id])
     changed_by=relationship("User", foreign_keys=[changed_by_id])
 
-
-
-
-
-

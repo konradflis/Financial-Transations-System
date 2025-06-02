@@ -94,18 +94,20 @@ def get_all_accounts(db):
 
 def generate_transaction_logs_auto_filename(db, count: int = 50, folder: str = "test_logs"):
     import random, json, os
-    from datetime import datetime, timedelta
+    from datetime import datetime
     from pytz import timezone
 
     warsaw_tz = timezone("Europe/Warsaw")
     os.makedirs(folder, exist_ok=True)
 
-    existing_files = [f for f in os.listdir(folder) if f.startswith(f"transactions_{count}_v") and f.endswith(".json")]
+    existing_files = [
+        f for f in os.listdir(folder)
+        if f.startswith(f"transactions_{count}_v") and f.endswith(".json")
+    ]
     version = len(existing_files) + 1
     filename = f"transactions_{count}_v{version}.json"
     filepath = os.path.join(folder, filename)
 
-    # Pobierz konta i zrób kopię sald do symulacji
     accounts = db.query(Account).filter(Account.status == "active").all()
     if not accounts:
         raise ValueError("Brak aktywnych kont w systemie.")
@@ -121,29 +123,34 @@ def generate_transaction_logs_auto_filename(db, count: int = 50, folder: str = "
             if not valid_sources:
                 continue
             from_account = random.choice(valid_sources)
-            to_account = random.choice([acc for acc in accounts if acc.account_number != from_account.account_number])
+            to_account = random.choice([
+                acc for acc in accounts
+                if acc.account_number != from_account.account_number
+            ])
 
             max_amount = round(account_balances[from_account.account_number] * 0.8, 2)
             if max_amount < 1:
                 continue
             amount = round(random.uniform(1, max_amount), 2)
 
-            # Aktualizacja sald
             account_balances[from_account.account_number] -= amount
             account_balances[to_account.account_number] += amount
 
             transaction = {
+                "type": "transfer",
                 "from_account_number": from_account.account_number,
                 "to_account_number": to_account.account_number,
                 "amount": amount,
-                "type": "transfer",
+                "username": str(from_account.user.username),
+                "password": from_account.user.password,
             }
 
         elif tx_type == "withdrawal":
-            valid_accounts = [acc for acc in accounts if account_balances[acc.account_number] >= 5]
+            valid_accounts = [acc for acc in accounts if account_balances[acc.account_number] >= 5 and acc.card]
             if not valid_accounts:
                 continue
             account = random.choice(valid_accounts)
+
             max_amount = round(account_balances[account.account_number] * 0.8, 2)
             if max_amount < 1:
                 continue
@@ -152,23 +159,28 @@ def generate_transaction_logs_auto_filename(db, count: int = 50, folder: str = "
             account_balances[account.account_number] -= amount
 
             transaction = {
+                "type": "withdrawal",
                 "from_account_number": account.account_number,
                 "to_account_number": None,
                 "amount": amount,
-                "type": "withdrawal",
+                "pin": account.card.pin,
             }
 
         elif tx_type == "deposit":
-            account = random.choice(accounts)
+            valid_accounts = [acc for acc in accounts if acc.card]
+            if not valid_accounts:
+                continue
+            account = random.choice(valid_accounts)
             amount = round(random.uniform(10, 1000), 2)
 
             account_balances[account.account_number] += amount
 
             transaction = {
+                "type": "deposit",
                 "from_account_number": None,
                 "to_account_number": account.account_number,
                 "amount": amount,
-                "type": "deposit",
+                "pin": account.card.pin,
             }
 
         transactions.append(transaction)
