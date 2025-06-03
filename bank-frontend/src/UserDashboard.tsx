@@ -471,7 +471,7 @@ const UserDashboard = () => {
         const data = await response.json();
         if (data["status"]=="success") {alert("Wpłata wykonana!");}
         else if (data["status"]=="failure") {alert("Operacja zakończona niepowodzeniem!");}
-        else {alert("Operacja oczekuje na weryfikację. Zgłoś się do banku.");}
+        else {alert("Operacja oczekuje na weryfikację...");}
 
         setLastestTransaction(data["transaction_id"]);
         setIsConfirmationOpen(true);  // oczekiwanie na potwierdzenie

@@ -6,6 +6,7 @@ from src.auth import get_current_user
 from pydantic import BaseModel
 
 from routes.aml import send_transaction_to_aml
+from src.celery_app import celery_app, process_aml_check
 
 router = APIRouter()
 
@@ -45,10 +46,8 @@ def create_transfer(transfer_data: TransferRequest, db: Session = Depends(get_db
     else:
         receiver_id = 0 # default account for external transfers
 
-    # Raise the exception when the sender has insufficient funds
     if sender_account.balance < amount:
-        raise HTTPException(status_code=400, detail="Insufficient balance.")
-
+        return {"status": "failure", "message": "insufficient balance"}
 
     # Create a new transaction record
     transaction = Transaction(from_account_id=sender_id, to_account_id=receiver_id, amount=amount,
@@ -59,10 +58,7 @@ def create_transfer(transfer_data: TransferRequest, db: Session = Depends(get_db
     db.commit()
     db.refresh(transaction)
 
-    send_transaction_to_aml(transaction.id, transfer_data.amount)
-
-
-
+    celery_app.send_task("process_aml_check", args=[transaction.id, amount])    # Przeniesienie taska do workera
 
     return {"message": "Transaction created. AML Checking process in progress", "transaction_id": transaction.id}
 
@@ -84,4 +80,5 @@ def transfer_accept(data: dict, db: Session = Depends(get_db)):
     transaction.status = "completed"
 
     db.commit()
-
+    db.refresh(transaction)
+    db.refresh(sender_account)

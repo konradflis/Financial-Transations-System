@@ -142,7 +142,7 @@ def check_transaction(data: dict, db: Session = Depends(get_db)):
 
 ## func used
 def send_transaction_to_aml(transaction_id: int, amount: float):
-    aml_url = "http://localhost:8000/aml/check"
+    aml_url = "http://bank-backend:8000/aml/check"
 
     data = {
         "transaction_id": transaction_id,
@@ -153,11 +153,11 @@ def send_transaction_to_aml(transaction_id: int, amount: float):
         response = httpx.post(aml_url, json=data)
         response.raise_for_status()
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to notify AML service: {exc}")
+        raise Exception(f"Failed to notify AML service: {exc}")     # can't raise httpexc in celery
 
 
 def send_transaction_to_accept(transaction_id: int):
-    transaction_accept="http://localhost:8000/transfer/accept"
+    transaction_accept="http://bank-backend:8000/transfer/accept"
     data={"transaction_id": transaction_id}
     try:
         response = httpx.post(transaction_accept, json=data)

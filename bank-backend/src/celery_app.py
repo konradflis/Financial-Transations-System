@@ -10,7 +10,7 @@ from routes.aml import send_transaction_to_aml
 
 celery_app = Celery("worker", broker="redis://redis:6379/0")
 
-@celery_app.task  # jeszcze nie uruchamiany
+@celery_app.task(name="process_aml_check")
 def process_aml_check(transaction_id: int, amount: float):
 
     send_transaction_to_aml(transaction_id, amount)
