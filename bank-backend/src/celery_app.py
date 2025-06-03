@@ -4,6 +4,7 @@ from database import get_db
 import requests
 from datetime import datetime
 import pytz
+import sys
 
 from routes.aml import send_transaction_to_aml
 
@@ -26,7 +27,11 @@ def process_atm_operation_task(transaction_id: int):        # kolejkowanie opera
         if not transaction:
             return
 
-        account = db.query(Account).filter(Account.id == transaction.from_account_id).first()
+        # rozgraniczenie na dwie rodzaje transakcji - wplaty/wyplaty --> roznica w tym czy to from_account, czy to_account
+        if transaction.type == "withdrawal":
+            account = db.query(Account).filter(Account.id == transaction.from_account_id).first()
+        elif transaction.type == "deposit":
+            account = db.query(Account).filter(Account.id == transaction.to_account_id).first()
 
         # Weryfikacja AML
         verification_response = requests.post(
@@ -36,6 +41,7 @@ def process_atm_operation_task(transaction_id: int):        # kolejkowanie opera
 
         now = datetime.now(pytz.timezone('Europe/Warsaw'))
 
+
         if verification_response.status_code != 200:
             transaction.status = "failed"
             transaction.date = now
@@ -43,14 +49,21 @@ def process_atm_operation_task(transaction_id: int):        # kolejkowanie opera
             return
 
         result_status = verification_response.json().get("status")
+        transaction.date = now
 
         if result_status == "completed":
             transaction.status = "completed"
-            transaction.date = now
-            account.balance -= transaction.amount
+
+            #rozgraniczenie czy balance na "+" czy "-"
+            if transaction.type == "withdrawal":
+                account.balance -= transaction.amount
+            elif transaction.type == "deposit":
+                account.balance += transaction.amount
+
+
         else:
             transaction.status = "pending"  # albo aml_blocked
-            transaction.date = now
+            return
 
         db.commit()
         db.refresh(transaction)
