@@ -30,8 +30,9 @@ def get_account_transactions(account_id: int, current_user: User = Depends(get_c
     account = db.query(Account).filter_by(id=account_id, user_id=current_user).first()
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
-    transactions = db.query(Transaction).filter_by(from_account_id=account.id).all()
-
+    transactions = db.query(Transaction).filter(
+        (Transaction.from_account_id == account.id) | (Transaction.to_account_id == account.id)
+    ).all()
 
     return [{"id": txn.id, "date": txn.date, "amount": txn.amount,
              "receiver": db.query(Account).filter_by(id=txn.to_account_id).first().account_number,

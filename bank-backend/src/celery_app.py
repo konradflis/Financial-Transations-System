@@ -57,10 +57,9 @@ def process_atm_operation_task(transaction_id: int):        # kolejkowanie opera
             #rozgraniczenie czy balance na "+" czy "-"
             if transaction.type == "withdrawal":
                 account.balance -= transaction.amount
-                #transaction.status = "completed"
             elif transaction.type == "deposit":
                 account.balance += transaction.amount
-                #transaction.status = "completed"
+
 
         else:
             transaction.status = "pending"  # albo aml_blocked
