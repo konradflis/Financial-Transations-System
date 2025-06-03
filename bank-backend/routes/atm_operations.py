@@ -225,46 +225,13 @@ def deposit_funds(deposit_data: ATMOperationModelPIN, db: Session = Depends(get_
     db.commit()
     db.refresh(new_transaction)
 
-    # Weryfikacja
-    verification_payload = {
-        "transaction_id": new_transaction.id,
-    }
-    verification_response = requests.post("http://localhost:8000/verify-transaction-auto", json=verification_payload)
+    celery_app.send_task("process_atm_operation_task", args=[new_transaction.id])
 
-    # Jeżeli zwrócono kod błędu — transakcja odrzucona
-    if verification_response.status_code != 200:
-        new_transaction.status = 'failed'
-        new_transaction.date = datetime.now(pytz.timezone('Europe/Warsaw'))
-        db.commit()  # Aktualizacja informacji w bazie
-        db.refresh(new_transaction)
-
-        return {"message": "Operacja odrzucona! Spróbuj ponownie później.", "status": "failure",
-                "transaction_id": new_transaction.id}
-
-    # Jeżeli zwrócono completed — można finalizować transakcję
-    elif verification_response.json()['status'] == 'completed':
-
-        new_transaction.status = 'completed'
-        new_transaction.date = datetime.now(pytz.timezone('Europe/Warsaw'))
-        account_data.balance += amount
-        db.commit()  # Aktualizacja informacji w bazie
-        db.refresh(new_transaction)
-
-        return {"message": "Operacja zakończona powodzeniem!", "status": "success",
-                "transaction_id": new_transaction.id}
-
-
-    # Jeśli weryfikacja się nie powiodła — transakcja wciąż oczekuje na ręczne zatwierdzenie
-    else:
-        new_transaction.status = 'pending'
-        new_transaction.date = datetime.now(pytz.timezone('Europe/Warsaw'))
-        db.commit()  # Aktualizacja informacji w bazie
-        db.refresh(new_transaction)
-
-        return {"message": "Operacja odrzucona! Na twoim koncie wykryto podejrzaną aktywność."
-                           "Skontaktuj się z oddziałem banku.", "status": "pending",
-                "transaction_id": new_transaction.id}
-
+    return {
+            "message": "Transakcja w toku...",
+            "transaction_id": new_transaction.id,
+            "status": "processing"
+        }
 
 @router.get("/atm-operation/confirmation")
 def get_confirmation(transaction_id: int, db: Session = Depends(get_db)):
