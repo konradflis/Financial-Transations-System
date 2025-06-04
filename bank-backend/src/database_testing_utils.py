@@ -13,6 +13,43 @@ import os
 
 url = "http://localhost:8000/bank_employee/add-user"
 
+## funkcja do tworzenia kart przypisanych do użytkownika
+def create_card_for_account(account_id):
+    pin = ''.join(random.choices("123456789", k=4))  ########## error analogiczny jak z user: nie może być 0 wiodące
+    card_data = {
+        "account_id": account_id,
+        "pin": pin
+    }
+    card_url = "http://localhost:8000/bank_employee/create-card"
+    response = requests.post(card_url, json=card_data)
+    return response
+
+def login_as_employee():
+    login_url = "http://localhost:8000/login"
+    login_data = {
+        "username": "1000000001",
+        "password": "emp"
+    }
+    response = requests.post(login_url, data=login_data)
+    if response.status_code == 200:
+        return response.json()["access_token"]
+    else:
+        raise Exception(f"Login failed: {response.text}")
+
+def get_dynamic_atm_id():
+    try:
+        r = requests.get("http://localhost:8000/atm-assignment")
+        if r.status_code == 200:
+            return r.json().get("atm_id")
+        else:
+            print("Błąd pobierania atm_id, status:", r.status_code)
+            return None
+    except Exception as e:
+        print("Wyjątek przy pobieraniu atm_id:", e)
+        return None
+
+
+
 # Funkcja do generowania losowego hasła
 def generate_random_password():
     return ''.join(random.choices(string.ascii_letters + string.digits, k=8))
@@ -41,10 +78,11 @@ def generate_random_user(db):
     }
 
 # Funkcja do dodawania wielu użytkowników
-def add_multiple_users(db, num_users):
+def add_multiple_users(db, num_users, token):
+    headers = {"Authorization": f"Bearer {token}"}
     for _ in range(num_users):
         user_data = generate_random_user(db)
-        response = requests.post(url, json=user_data)
+        response = requests.post(url, json=user_data, headers=headers)
 
         if response.status_code == 200:
             print(f"User {user_data['username']} added successfully!")
@@ -52,23 +90,21 @@ def add_multiple_users(db, num_users):
             print(f"Error adding user {user_data['username']}: {response.text}")
 
 
-## skrypt do dodawania wielu kont
-## aby uruchomić, należy otworzyć projekt jako folder bank-backend --> konieczne, ze względu na ścieżki
-
-# Endpoint do dodawania kont
-url = "http://localhost:8000/bank_employee/add-account"
-
 # Funkcja do tworzenia konta dla użytkownika
-def create_account_for_user(user_id, initial_balance=0.0):
+def create_account_for_user(user_id, token, initial_balance=0.0):
     account_data = {
         "user_id": user_id,
         "initial_balance": initial_balance
     }
-    response = requests.post(url, json=account_data)
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    response = requests.post("http://localhost:8000/bank_employee/add-account",
+                             json=account_data, headers=headers)
     return response
 
+
+
 # Funkcja do dodania wielu kont użytkownikom
-def create_accounts_for_users(min_accounts: int, max_accounts: int):
+def create_accounts_for_users(min_accounts: int, max_accounts: int, token: str):
     db = next(get_db())
     users = db.query(User).all()
 
@@ -77,11 +113,21 @@ def create_accounts_for_users(min_accounts: int, max_accounts: int):
         print(f"Creating {num_accounts} accounts for user {user.id} ({user.first_name} {user.last_name})")
 
         for _ in range(num_accounts):
+
+            ## creating account
             balance = round(random.uniform(0, 10000), 2)  # przykładowe saldo
-            response = create_account_for_user(user.id, balance)
+            response = create_account_for_user(user.id, token, balance)
 
             if response.status_code == 200:
                 print(f" Account created for user {user.id}")
+
+                account_id = response.json().get("account_id")  # zakładam, że endpoint zwraca id konta
+                if account_id:
+                    card_response = create_card_for_account(account_id)
+                    if card_response.status_code == 200:
+                        print(f"  Card created for account {account_id}")
+                    else:
+                        print(f"  Error creating card for account {account_id}: {card_response.text}")
             else:
                 print(f" Error creating account for user {user.id}: {response.text}")
 
@@ -138,8 +184,8 @@ def generate_transaction_logs_auto_filename(db, count: int = 50, folder: str = "
 
             transaction = {
                 "type": "transfer",
-                "from_account_number": from_account.account_number,
-                "to_account_number": to_account.account_number,
+                "sender_account": from_account.account_number,
+                "receiver_account": to_account.account_number,
                 "amount": amount,
                 "username": str(from_account.user.username),
                 "password": from_account.user.password,
@@ -154,16 +200,19 @@ def generate_transaction_logs_auto_filename(db, count: int = 50, folder: str = "
             max_amount = round(account_balances[account.account_number] * 0.8, 2)
             if max_amount < 1:
                 continue
-            amount = round(random.uniform(1, max_amount), 2)
+            amount = random.randint(1, 100) * 10  # losuje liczbę z przedziału 10, 20, ..., 1000
+
+            selected_card = random.choice(account.card) #wybór losowej karty (przyp. do tego konta)
 
             account_balances[account.account_number] -= amount
 
             transaction = {
                 "type": "withdrawal",
-                "from_account_number": account.account_number,
-                "to_account_number": None,
+                "sender_account": account.account_number,
+                "receiver_account": None,
                 "amount": amount,
-                "pin": random.choice(account.card).pin if account.card else None ##random w związku z tym, że może być więcej niż jedna karta do konta
+                "card_id": selected_card.id,
+                "pin": str(selected_card.pin)
             }
 
         elif tx_type == "deposit":
@@ -171,16 +220,19 @@ def generate_transaction_logs_auto_filename(db, count: int = 50, folder: str = "
             if not valid_accounts:
                 continue
             account = random.choice(valid_accounts)
-            amount = round(random.uniform(10, 1000), 2)
+            amount = random.randint(1, 100) * 10  # losuje liczbę z przedziału 10, 20, ..., 1000
+
+            selected_card = random.choice(account.card)  # wybór losowej karty (przyp. do tego konta)
 
             account_balances[account.account_number] += amount
 
             transaction = {
                 "type": "deposit",
-                "from_account_number": None,
-                "to_account_number": account.account_number,
+                "sender_account": None,
+                "receiver_account": account.account_number,
                 "amount": amount,
-                "pin": random.choice(account.card).pin if account.card else None ##random w związku z tym, że może być więcej niż jedna karta do konta
+                "card_id": selected_card.id,
+                "pin": str(selected_card.pin)
             }
 
         transactions.append(transaction)
@@ -193,8 +245,12 @@ def generate_transaction_logs_auto_filename(db, count: int = 50, folder: str = "
 
 def main():
     db = next(get_db())  # Pobieramy sesję bazy danych
-    #add_multiple_users(db, 2)  # Dodajemy 2 użytkowników
-    generate_transaction_logs_auto_filename(db)
+
+    #token = login_as_employee() ## login - bank emp
+    #add_multiple_users(db, 2, token)  # Dodajemy 2 użytkowników
+    #create_accounts_for_users(1,3, token)
+
+    #generate_transaction_logs_auto_filename(db)
 
 if __name__ == "__main__":
     main()

@@ -60,7 +60,8 @@ def create_transfer(transfer_data: TransferRequest, db: Session = Depends(get_db
 
     celery_app.send_task("process_aml_check", args=[transaction.id, amount])    # Przeniesienie taska do workera
 
-    return {"message": "Transaction created. AML Checking process in progress", "transaction_id": transaction.id}
+    return {"message": "Transaction created. AML Checking process in progress",
+            "transaction_id": transaction.id}
 
 @router.post("/transfer/accept")
 def transfer_accept(data: dict, db: Session = Depends(get_db)):

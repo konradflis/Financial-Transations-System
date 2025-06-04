@@ -1,0 +1,13 @@
+[
+    {
+        "type": "deposit",
+        "from_account_number": "123",
+        "to_account_number": "0006203065122751814052214",
+        "amount": 200,
+        "username": "1234567890",
+        "password": "jkow",
+        "card_id": 2,
+        "pin": "1234",
+        "atm_id": 8
+    }
+]

@@ -3,7 +3,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPExce
 from sqlalchemy.orm import Session
 from src.auth import bank_employee_required, hash_password
 from src.database import get_db
-from src.models import User, Account, AtmDevice
+from src.models import User, Account, Card, AtmDevice
 import random
 from pydantic import BaseModel, constr
 from typing import Optional, List
@@ -19,6 +19,10 @@ class UserCreate(BaseModel):
     username: int  # bo to 10-cyfrowe ID
     password: str ## alternatywnie: constr(min_length=6)  # może być więcej walidacji
     #role: str
+
+class CardCreateRequest(BaseModel):
+    account_id: int
+    pin: constr(min_length=4, max_length=4)  # 4-cyfrowy PIN jako string
 
 @router.post("/bank_employee/add-user")
 def create_user_admin(user: UserCreate, db: Session = Depends(get_db), current_user=Depends(bank_employee_required)):
@@ -107,6 +111,24 @@ def delete_account(account_number: str, db: Session = Depends(get_db), current_u
     db.delete(account)
     db.commit()
     return {"message": f"Account {account_number} successfully deleted"}
+
+@router.post("/bank_employee/create-card")
+def create_card(card_req: CardCreateRequest, db: Session = Depends(get_db)):
+    account = db.query(Account).filter(Account.id == card_req.account_id).first()
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    # opcjonalnie: sprawdź czy karta już istnieje dla tego konta
+    existing_card = db.query(Card).filter(Card.account_id == card_req.account_id).first()
+    if existing_card:
+        raise HTTPException(status_code=400, detail="Card already exists for this account")
+
+    card = Card(account_id=card_req.account_id, pin=card_req.pin)
+    db.add(card)
+    db.commit()
+    db.refresh(card)
+
+    return {"message": "Card created", "card_id": card.id}
 
 
 @router.get("/bank_employee/user-data", response_model=dict)

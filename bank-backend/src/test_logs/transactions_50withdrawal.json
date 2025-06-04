@@ -1,0 +1,11 @@
+[
+    {
+        "type": "withdrawal",
+        "receiver_account": "123",
+        "amount": 200,
+        "username": "1234567890",
+        "password": "jkow",
+        "card_id": 2,
+        "pin": "1234"
+    }
+]
