@@ -11,10 +11,58 @@ from routes.aml import send_transaction_to_aml
 
 celery_app = Celery("worker", broker="redis://redis:6379/0")
 
+@celery_app.task(name="create_transaction")
+def create_transaction(user_id: int, sender_account: str, receiver_account: str, amount: float):
+
+    db = next(get_db())
+
+    try:
+        sender_account = db.query(Account).filter(Account.account_number == sender_account,
+                                                  Account.user_id == user_id).first()
+        sender_id = sender_account.id
+
+        if not sender_account:
+            raise Exception(f"Account not found: {sender_account}")
+
+        # Check if receiver is in our database (if not, it is an external transfer)
+        receiver_account = db.query(Account).filter(Account.account_number == receiver_account).first()
+        if receiver_account:
+            receiver_id = receiver_account.id
+        else:
+            receiver_id = 0  # default account for external transfers
+
+        if sender_account.balance < amount:
+            return {"status": "failure", "message": "insufficient balance"}
+
+        # Create a new transaction record
+        transaction = Transaction(from_account_id=sender_id, to_account_id=receiver_id, amount=amount,
+                                  type="transfer", status="pending")
+
+        # Add the record to the database
+        db.add(transaction)
+        db.commit()
+        db.refresh(transaction)
+
+        celery_app.send_task("process_aml_check", args=[transaction.id, amount])  # Przeniesienie taska do workera
+
+    except Exception as e:
+        db.rollback()
+        raise e
+    finally:
+        db.close()
+
+
 @celery_app.task(name="process_aml_check")
 def process_aml_check(transaction_id: int, amount: float):
 
-    send_transaction_to_aml(transaction_id, amount)
+    db = next(get_db())
+    try:
+        send_transaction_to_aml(transaction_id, amount)
+    except Exception as e:
+        db.rollback()
+        raise e
+    finally:
+        db.close()
 
 
 @celery_app.task(name="process_atm_operation_task")         # wywołuje się

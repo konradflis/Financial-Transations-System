@@ -377,7 +377,7 @@ const UserDashboard = () => {
       });
 
       if (response.ok) {
-        alert("Przelew wykonany!");
+        alert("Przelew w toku...");
         setIsTransferOpen(false);
         setReceiver("");
         setAmount("");
