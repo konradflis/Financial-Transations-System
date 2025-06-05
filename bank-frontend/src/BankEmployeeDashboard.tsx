@@ -2,7 +2,7 @@ import {ChangeEvent, useEffect, useState} from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Box, Typography, Button, Paper, Table, TableHead, TableRow, TableCell,
-  TableBody, Modal, TextField
+  TableBody, Modal, TextField, FormControlLabel, Checkbox
 } from "@mui/material";
 import {SelectChangeEvent} from "@mui/material/Select";
 import TopBar from './TopBar'
@@ -43,6 +43,8 @@ const BankEmployeeDashboard = () => {
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [userId, setUserId] = useState("")
+  const [addCard, setAddCard] = useState(false);
+  const [pinCode, setPinCode] = useState("");
 
   const [filters, setFilters] = useState({
     username: '',
@@ -197,12 +199,25 @@ const BankEmployeeDashboard = () => {
         },
         body: JSON.stringify({
           user_id: parseInt(userId),
+          initial_balance: 0, // lub inna wartość początkowa
         }),
       });
 
       if (response.ok) {
+        const data = await response.json();
+        const accountId = data.account_id;
+
         alert("Konto zostało utworzone!");
+
+        // Jeśli zaznaczono checkbox "Dodaj kartę"
+        if (addCard) {
+          await handleCardCreation(accountId);
+        }
+
+        // Reset danych formularza
         setUserId("");
+        setPinCode("");
+        setAddCard(false);
       } else {
         const errorData = await response.json();
         alert(`Błąd: ${errorData.detail || "Nieznany błąd"}`);
@@ -210,6 +225,47 @@ const BankEmployeeDashboard = () => {
     } catch (err) {
       console.error("Błąd tworzenia konta:", err);
       alert("Wystąpił błąd podczas tworzenia konta.");
+    }
+  };
+
+  const handleCardCreation = async (accountId: number) => {
+    const token = localStorage.getItem("token");
+
+    if (!token || !pinCode || !accountId) {
+      alert("Brak danych do utworzenia karty.");
+      return;
+    }
+
+    if (!/^\d{4}$/.test(pinCode)) {
+      alert("PIN musi składać się z dokładnie 4 cyfr.");
+      return;
+    }
+
+    try {
+      const response = await fetch("http://localhost:8000/bank_employee/add-card", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          account_id: accountId,
+          pin_code: pinCode,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        alert("Karta została dodana!");
+        setPinCode("");
+        setAddCard(false);
+      } else {
+        const errorData = await response.json();
+        alert(`Błąd przy dodawaniu karty: ${errorData.detail || "Nieznany błąd"}`);
+      }
+    } catch (err) {
+      console.error("Błąd tworzenia karty:", err);
+      alert("Wystąpił błąd podczas dodawania karty.");
     }
   };
 
@@ -528,6 +584,7 @@ const BankEmployeeDashboard = () => {
             <Typography id="transfer-modal" variant="h6" mb={2}>
               Nowe konto bankowe
             </Typography>
+
             <TextField
               fullWidth
               label="ID użytkownika"
@@ -535,6 +592,28 @@ const BankEmployeeDashboard = () => {
               onChange={(e) => setUserId(e.target.value)}
               sx={{ mb: 2 }}
             />
+
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={addCard}
+                  onChange={(e) => setAddCard(e.target.checked)}
+                />
+              }
+              label="Dodaj kartę"
+              sx={{ mb: 2 }}
+            />
+
+            <TextField
+              fullWidth
+              label="Kod PIN (4 cyfry)"
+              value={pinCode}
+              onChange={(e) => setPinCode(e.target.value)}
+              disabled={!addCard}
+              inputProps={{ maxLength: 4 }}
+              sx={{ mb: 2 }}
+            />
+
             <Box display="flex" justifyContent="space-between">
               <Button variant="outlined" onClick={() => setisCreateAccountOpen(false)}>
                 Anuluj
@@ -542,7 +621,9 @@ const BankEmployeeDashboard = () => {
               <Button
                 variant="contained"
                 color="primary"
-                onClick={() => handleAccountCreation()}
+                onClick={() => {
+                  handleAccountCreation();
+                }}
                 disabled={!userId}
               >
                 Zatwierdź

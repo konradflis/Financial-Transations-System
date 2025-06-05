@@ -3,7 +3,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPExce
 from sqlalchemy.orm import Session
 from src.auth import bank_employee_required, hash_password
 from src.database import get_db
-from src.models import User, Account, AtmDevice
+from src.models import User, Account, AtmDevice, Card
 import random
 from pydantic import BaseModel, constr
 from typing import Optional, List
@@ -19,6 +19,10 @@ class UserCreate(BaseModel):
     username: int  # bo to 10-cyfrowe ID
     password: str ## alternatywnie: constr(min_length=6)  # może być więcej walidacji
     #role: str
+
+class CardCreateRequest(BaseModel):
+    account_id: int
+    pin_code: constr(min_length=4, max_length=4)  # tylko 4 cyfry
 
 @router.post("/bank_employee/add-user")
 def create_user_admin(user: UserCreate, db: Session = Depends(get_db), current_user=Depends(bank_employee_required)):
@@ -96,6 +100,28 @@ def create_account(account: AccountCreate, db: Session = Depends(get_db), curren
         "account_number": new_account.account_number,
         "length_account": len(account_number),
     }
+
+@router.post("/bank_employee/add-card", response_model=dict)
+def add_card(
+    data: CardCreateRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(bank_employee_required)
+):
+    # Sprawdź, czy konto istnieje
+    account = db.query(Account).filter(Account.id == data.account_id).first()
+    if not account:
+        raise HTTPException(
+            status_code=404,
+            detail="Account not found"
+        )
+
+    # Dodaj kartę do konta
+    new_card = Card(account_id=account.id, pin=data.pin_code)
+    db.add(new_card)
+    db.commit()
+    db.refresh(new_card)
+
+    return {"message": "Card created successfully", "card_id": new_card.id}
 
 @router.delete("/bank_employee/delete-account", response_model=dict)
 def delete_account(account_number: str, db: Session = Depends(get_db), current_user=Depends(bank_employee_required)):

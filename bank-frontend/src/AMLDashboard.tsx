@@ -61,7 +61,6 @@ const AMLDashboard = () => {
       (filters.from_account_id ? tx.from_account_id === Number(filters.from_account_id) : true) &&
       (filters.amount ? tx.amount.toString().includes(filters.amount) : true) &&
       (filters.type ? tx.type.includes(filters.type) : true) &&
-      (filters.status ? tx.status.includes(filters.status) : true) &&
       (filters.device ? tx.device.includes(filters.device) : true)
     );
   });
@@ -368,20 +367,6 @@ const AMLDashboard = () => {
                 <MenuItem value="deposit">deposit</MenuItem>
               </Select>
             </FormControl>
-            <FormControl fullWidth size="small">
-              <InputLabel>Status</InputLabel>
-              <Select
-                label="Status"
-                name="status"
-                value={filters.status}
-                onChange={handleFilterChange}
-              >
-                <MenuItem value="">all</MenuItem>
-                <MenuItem value="pending">pending</MenuItem>
-                <MenuItem value="success">success</MenuItem>
-                <MenuItem value="cancelled">cancelled</MenuItem>
-              </Select>
-            </FormControl>
             <TextField
               label="Urządzenie"
               variant="outlined"
@@ -406,7 +391,6 @@ const AMLDashboard = () => {
                   <TableCell>Odbiorca</TableCell>
                   <TableCell>Kwota</TableCell>
                   <TableCell>Typ</TableCell>
-                  <TableCell>Status</TableCell>
                   <TableCell>Urządzenie</TableCell>
                   <TableCell>Decyzja</TableCell>
                 </TableRow>
@@ -420,7 +404,6 @@ const AMLDashboard = () => {
                           <TableCell>{tx.to_account_id}</TableCell>
                           <TableCell>{tx.amount.toFixed(2)} PLN</TableCell>
                           <TableCell>{tx.type}</TableCell>
-                          <TableCell>{tx.status}</TableCell>
                           <TableCell>{tx.device}</TableCell>
                           <TableCell>
                             <Button onClick={() => handleOpen(tx)}>Oceń</Button>
