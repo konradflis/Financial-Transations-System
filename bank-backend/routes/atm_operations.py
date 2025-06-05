@@ -148,6 +148,7 @@ def verify_pin(verification_data: PINVerificationModel, db: Session = Depends(ge
     # Sprawdzenie, czy użytkownik nie jest tymczasowo zablokowany
     # Oczekiwanie na uzyskanie dostępu do konta
     response = check_account_lock(card_id)
+    print("DEBUG check_account_lock response:", response)
 
     if response['label'] == 'timeout':
         raise HTTPException(status_code=404, detail="Nie znaleziono konta.")

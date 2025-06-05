@@ -154,7 +154,18 @@ def generate_transaction_logs_auto_filename(db, count: int = 50, folder: str = "
     filename = f"transactions_{count}_v{version}.json"
     filepath = os.path.join(folder, filename)
 
-    accounts = db.query(Account).filter(Account.status == "active").all()
+
+
+    accounts = (
+        db.query(Account)
+        .join(Account.user)
+        .filter(
+            Account.status == "active",
+            User.role == "user",
+            User.id != "1234567890" ## ograniczamy generowanie danych kont tak, żeby nie było tam kont utworzonych ręcznie
+        )
+        .all()
+    )
     if not accounts:
         raise ValueError("Brak aktywnych kont w systemie.")
 
@@ -162,7 +173,8 @@ def generate_transaction_logs_auto_filename(db, count: int = 50, folder: str = "
     transactions = []
 
     for _ in range(count):
-        tx_type = random.choice(["transfer", "withdrawal", "deposit"])
+        #tx_type = random.choice(["transfer", "withdrawal", "deposit"])
+        tx_type = 'deposit'
 
         if tx_type == "transfer":
             valid_sources = [acc for acc in accounts if account_balances[acc.account_number] >= 5]
@@ -250,7 +262,7 @@ def main():
     #add_multiple_users(db, 2, token)  # Dodajemy 2 użytkowników
     #create_accounts_for_users(1,3, token)
 
-    #generate_transaction_logs_auto_filename(db)
+    generate_transaction_logs_auto_filename(db, count=20)
 
 if __name__ == "__main__":
     main()

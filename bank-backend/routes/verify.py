@@ -28,6 +28,16 @@ def auto_verify(transaction_pending: AutoVerificationModel, db: Session = Depend
         raise HTTPException(status_code=403, detail="Transakcja nie jest oczekująca.")
 
     # Dla kwot niższych od wybranego progu — automatyczna akceptacja
+    if transaction_data.amount <= 20000:
+        return {"message": "Weryfikacja zakończona pomyślnie.", "status": "completed"}
+
+    # Dla kwot wyższych — przekierowanie do pracownika (weryfikacja ręczna)
+    else:
+        return {"message": "Wymagana szczegółowa weryfikacja.", "status": "pending"}
+
+
+    """
+        # Dla kwot niższych od wybranego progu — automatyczna akceptacja
     if (transaction_data.amount <= 20000
             and not is_multiple_transactions_different_locations(db, transaction_data.from_account_id, transaction_data.type))\
             and not is_smurfing_activity(db,transaction_data.from_account_id,transaction_data.type):
@@ -36,5 +46,8 @@ def auto_verify(transaction_pending: AutoVerificationModel, db: Session = Depend
     # Dla kwot wyższych — przekierowanie do pracownika (weryfikacja ręczna)
     else:
         return {"message": "Wymagana szczegółowa weryfikacja.", "status": "pending"}
+    
+
+    """
 
 

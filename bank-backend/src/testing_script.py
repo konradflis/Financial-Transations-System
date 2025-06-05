@@ -7,8 +7,10 @@ from datetime import datetime
 
 from database_testing_utils import get_dynamic_atm_id
 
+from testing_clearing_atm import activate_busy_accounts, activate_busy_atms
 
-input_data_path="test_logs/transactions_50_v10.json"
+
+input_data_path="test_logs/transactions_20_v2.json"
 BASE_URL = "http://localhost:8000"  #backend
 
 Session = Depends(get_db)
@@ -79,6 +81,7 @@ def process_transaction(txn):
 
             ## przyporzadkowanie wolnego atm:
             atm_id=get_dynamic_atm_id()
+
             response_deposit=requests.post(
                 f"{BASE_URL}/atm-operation/deposit",
                 json={
