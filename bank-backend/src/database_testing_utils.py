@@ -8,11 +8,9 @@ from datetime import datetime, timedelta
 import json
 import os
 
+
+
 ## skrypt do dodawania wielu uzytkowników
-## aby uruchomić, należy otworzyć projekt jako folder bank-backend --> konieczne, ze względu na ścieżki
-
-url = "http://localhost:8000/bank_employee/add-user"
-
 ## funkcja do tworzenia kart przypisanych do użytkownika
 def create_card_for_account(account_id):
     pin = ''.join(random.choices("123456789", k=4))  ########## error analogiczny jak z user: nie może być 0 wiodące
@@ -82,7 +80,9 @@ def add_multiple_users(db, num_users, token):
     headers = {"Authorization": f"Bearer {token}"}
     for _ in range(num_users):
         user_data = generate_random_user(db)
-        response = requests.post(url, json=user_data, headers=headers)
+        response = requests.post("http://localhost:8000/bank_employee/add-user",
+                                 json=user_data,
+                                 headers=headers)
 
         if response.status_code == 200:
             print(f"User {user_data['username']} added successfully!")
@@ -162,7 +162,7 @@ def generate_transaction_logs_auto_filename(db, count: int = 50, folder: str = "
         .filter(
             Account.status == "active",
             User.role == "user",
-            User.id != "1234567890" ## ograniczamy generowanie danych kont tak, żeby nie było tam kont utworzonych ręcznie
+            User.id.in_(list(range(22, 43)))  # tylko sztucznie utworzeni userzy
         )
         .all()
     )
@@ -174,7 +174,7 @@ def generate_transaction_logs_auto_filename(db, count: int = 50, folder: str = "
 
     for _ in range(count):
         #tx_type = random.choice(["transfer", "withdrawal", "deposit"])
-        tx_type = 'deposit'
+        tx_type = 'transfer'
 
         if tx_type == "transfer":
             valid_sources = [acc for acc in accounts if account_balances[acc.account_number] >= 5]
@@ -259,10 +259,31 @@ def main():
     db = next(get_db())  # Pobieramy sesję bazy danych
 
     #token = login_as_employee() ## login - bank emp
-    #add_multiple_users(db, 2, token)  # Dodajemy 2 użytkowników
+    #add_multiple_users(db, 10, token)  # Dodajemy 2 użytkowników
+
     #create_accounts_for_users(1,3, token)
 
-    generate_transaction_logs_auto_filename(db, count=20)
+    """user_id= list(range(22, 43)) # sztucznie stworzeni userzy, którzy mają niezahashowane hasła w bazie
+    lines = ["user_id,account_id,account_number"]
+
+    for id in user_id:
+        response = create_account_for_user(id, token, initial_balance=5000)
+
+        if response.status_code == 200:
+            data = response.json()
+            account_id = data.get("account_id")
+            account_number = data.get("account_number")
+            print(f"Konto utworzone: user_id={user_id}, account_id={account_id}, number={account_number}")
+            lines.append(f"{user_id},{account_id},{account_number}")
+        else:
+            print(f"Błąd przy tworzeniu konta dla user_id={user_id}: {response.text}")
+
+    # Zapis do pliku .txt (czytelny i łatwy do importu)
+    with open("test_logs/created_accounts.txt", "w", encoding="utf-8") as f:
+        f.write("\n".join(lines))"""
+
+
+    generate_transaction_logs_auto_filename(db, count=200)
 
 if __name__ == "__main__":
     main()

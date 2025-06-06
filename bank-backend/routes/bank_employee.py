@@ -7,6 +7,7 @@ from src.models import User, Account, Card, AtmDevice
 import random
 from pydantic import BaseModel, constr
 from typing import Optional, List
+import os
 
 router = APIRouter()
 r = redis.Redis(host='localhost', port=6379, db=0)
@@ -30,15 +31,28 @@ def create_user_admin(user: UserCreate, db: Session = Depends(get_db), current_u
     if existing_user:
         raise HTTPException(status_code=400, detail="User already exists")
 
+    TESTING=True
+
     # Utwórz użytkownika
-    db_user = User(
-        first_name=user.first_name,
-        last_name=user.last_name,
-        email=user.email,
-        username=user.username,
-        password=hash_password(user.password),
-        role="user"
-    )
+    if TESTING:
+        db_user = User(
+            first_name=user.first_name,
+            last_name=user.last_name,
+            email=user.email,
+            username=user.username,
+            password=user.password,
+            role="user"
+        )
+    else:
+
+        db_user = User(
+            first_name=user.first_name,
+            last_name=user.last_name,
+            email=user.email,
+            username=user.username,
+            password=hash_password(user.password),
+            role="user"
+        )
 
     db.add(db_user)
     db.commit()

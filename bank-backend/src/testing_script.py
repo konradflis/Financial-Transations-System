@@ -6,11 +6,12 @@ from src.database import get_db
 from datetime import datetime
 
 from database_testing_utils import get_dynamic_atm_id
+from src.auth import hash_password
 
 from testing_clearing_atm import activate_busy_accounts, activate_busy_atms
 
 
-input_data_path="test_logs/transactions_20_v2.json"
+input_data_path="test_logs/transactions_200_v1.json"
 BASE_URL = "http://localhost:8000"  #backend
 
 Session = Depends(get_db)
@@ -31,10 +32,10 @@ def process_transaction(txn):
             )
 
             if response_logging.status_code == 200:
-                print(f"{txn_type.title()} zakończony sukcesem:", response_logging.json())
+                print(f"response_logging zakończony sukcesem:", response_logging.json())
                 access_token = response_logging.json()["access_token"]
             else:
-                print(f"Błąd podczas {txn_type}: {response_logging.status_code} {response_logging.text}")
+                print(f"Błąd podczas response_logging: {response_logging.status_code} {response_logging.text}")
 
 
             ## request - transfer
@@ -49,6 +50,13 @@ def process_transaction(txn):
                     "Authorization": f"Bearer {access_token}"
                 }
             )
+
+            if response_transfer.status_code == 200:
+                print(f"response_transfer zakończony sukcesem:", response_transfer.json())
+                access_token = response_transfer.json()["access_token"]
+            else:
+                print(f"Błąd podczas response_transfer: {response_transfer.status_code} {response_transfer.text}")
+
 
             ## request - wylogowanie uzytkownika
             response_logout = requests.post(
